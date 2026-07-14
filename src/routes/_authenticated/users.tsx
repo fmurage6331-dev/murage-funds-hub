@@ -52,9 +52,9 @@ function Page() {
         .eq("id", userId);
       if (profErr) throw profErr;
 
-      const { error: roleErr } = await supabase
+  const { error: roleErr } = await supabase
         .from("user_roles")
-        .insert({ user_id: userId, role: "member" });
+        .upsert({ user_id: userId, role: "member" }, { onConflict: "user_id,role", ignoreDuplicates: true });
       if (roleErr) throw roleErr;
     },
     onSuccess: () => { toast.success("Member approved"); invalidate(); },
