@@ -14,6 +14,54 @@ export type Database = {
   }
   public: {
     Tables: {
+      contributions: {
+        Row: {
+          amount: number
+          confirmed_at: string | null
+          confirmed_by: string | null
+          contributed_on: string
+          created_at: string
+          currency: string
+          id: string
+          member_id: string
+          method: string
+          notes: string | null
+          reference: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          contributed_on?: string
+          created_at?: string
+          currency?: string
+          id?: string
+          member_id: string
+          method?: string
+          notes?: string | null
+          reference?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          contributed_on?: string
+          created_at?: string
+          currency?: string
+          id?: string
+          member_id?: string
+          method?: string
+          notes?: string | null
+          reference?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       donors: {
         Row: {
           address: string | null
@@ -46,6 +94,199 @@ export type Database = {
           name?: string
           notes?: string | null
           phone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      loan_rules: {
+        Row: {
+          active: boolean
+          created_at: string
+          id: string
+          interest_rate_percent: number
+          max_amount: number
+          max_multiplier: number
+          max_repayment_months: number
+          min_membership_days: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          interest_rate_percent?: number
+          max_amount?: number
+          max_multiplier?: number
+          max_repayment_months?: number
+          min_membership_days?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          interest_rate_percent?: number
+          max_amount?: number
+          max_multiplier?: number
+          max_repayment_months?: number
+          min_membership_days?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      loan_votes: {
+        Row: {
+          board_member_id: string
+          comment: string | null
+          created_at: string
+          id: string
+          loan_id: string
+          vote: string
+        }
+        Insert: {
+          board_member_id: string
+          comment?: string | null
+          created_at?: string
+          id?: string
+          loan_id: string
+          vote: string
+        }
+        Update: {
+          board_member_id?: string
+          comment?: string | null
+          created_at?: string
+          id?: string
+          loan_id?: string
+          vote?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loan_votes_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "loans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      loans: {
+        Row: {
+          amount: number
+          auto_eligible: boolean
+          created_at: string
+          decision_at: string | null
+          eligibility_note: string | null
+          forwarded_at: string | null
+          forwarded_by: string | null
+          id: string
+          member_id: string
+          purpose: string
+          rejection_reason: string | null
+          repayment_months: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          auto_eligible?: boolean
+          created_at?: string
+          decision_at?: string | null
+          eligibility_note?: string | null
+          forwarded_at?: string | null
+          forwarded_by?: string | null
+          id?: string
+          member_id: string
+          purpose: string
+          rejection_reason?: string | null
+          repayment_months: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          auto_eligible?: boolean
+          created_at?: string
+          decision_at?: string | null
+          eligibility_note?: string | null
+          forwarded_at?: string | null
+          forwarded_by?: string | null
+          id?: string
+          member_id?: string
+          purpose?: string
+          rejection_reason?: string | null
+          repayment_months?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      meeting_minutes: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          meeting_id: string
+          recorded_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          meeting_id: string
+          recorded_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          meeting_id?: string
+          recorded_by?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meeting_minutes_meeting_id_fkey"
+            columns: ["meeting_id"]
+            isOneToOne: false
+            referencedRelation: "meetings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meetings: {
+        Row: {
+          agenda: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          location: string | null
+          scheduled_for: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          agenda?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          location?: string | null
+          scheduled_for: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          agenda?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          location?: string | null
+          scheduled_for?: string
+          title?: string
           updated_at?: string
         }
         Relationships: []
@@ -153,6 +394,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      board_majority_count: { Args: never; Returns: number }
+      has_any_role: {
+        Args: {
+          _roles: Database["public"]["Enums"]["app_role"][]
+          _user_id: string
+        }
+        Returns: boolean
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -162,7 +411,14 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "admin" | "member"
+      app_role:
+        | "admin"
+        | "member"
+        | "chairman"
+        | "treasurer"
+        | "secretary"
+        | "assistant_secretary"
+        | "board_member"
       transaction_type: "income" | "expense"
     }
     CompositeTypes: {
@@ -291,7 +547,15 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "member"],
+      app_role: [
+        "admin",
+        "member",
+        "chairman",
+        "treasurer",
+        "secretary",
+        "assistant_secretary",
+        "board_member",
+      ],
       transaction_type: ["income", "expense"],
     },
   },

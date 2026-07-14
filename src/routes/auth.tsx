@@ -21,7 +21,7 @@ function AuthPage() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) navigate({ to: "/dashboard", replace: true });
+      if (data.session) navigate({ to: "/my-contributions", replace: true });
     });
   }, [navigate]);
 
@@ -32,7 +32,7 @@ function AuthPage() {
     setLoading(false);
     if (error) return toast.error(error.message);
     toast.success("Welcome back");
-    navigate({ to: "/dashboard", replace: true });
+    navigate({ to: "/my-contributions", replace: true });
   };
 
   const signUp = async (e: React.FormEvent) => {
@@ -42,7 +42,7 @@ function AuthPage() {
       email,
       password,
       options: {
-        emailRedirectTo: `${window.location.origin}/dashboard`,
+        emailRedirectTo: `${window.location.origin}/my-contributions`,
         data: { full_name: fullName },
       },
     });

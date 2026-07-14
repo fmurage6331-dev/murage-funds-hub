@@ -1,13 +1,16 @@
 import { createFileRoute, Outlet, redirect, Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
   SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger,
   SidebarHeader, SidebarFooter,
 } from "@/components/ui/sidebar";
-import { Button } from "@/components/ui/button";
-import { LayoutDashboard, Receipt, Users, LogOut, Leaf } from "lucide-react";
+import {
+  LayoutDashboard, Receipt, Users, LogOut, Leaf, HandCoins, Landmark,
+  CalendarDays, ShieldCheck, Settings, Wallet, Gavel,
+} from "lucide-react";
+import { useRoles } from "@/hooks/use-roles";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
@@ -19,27 +22,12 @@ export const Route = createFileRoute("/_authenticated")({
   component: AuthedLayout,
 });
 
-const items = [
-  { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
-  { title: "Transactions", url: "/transactions", icon: Receipt },
-  { title: "Donors", url: "/donors", icon: Users },
-] as const;
-
 function AuthedLayout() {
   const { user } = Route.useRouteContext();
   const navigate = useNavigate();
   const qc = useQueryClient();
   const path = useRouterState({ select: (s) => s.location.pathname });
-
-  const { data: role } = useQuery({
-    queryKey: ["role", user.id],
-    queryFn: async () => {
-      const { data } = await supabase.from("user_roles").select("role").eq("user_id", user.id);
-      return data?.map((r) => r.role) ?? [];
-    },
-  });
-
-  const isAdmin = role?.includes("admin");
+  const r = useRoles(user.id);
 
   const signOut = async () => {
     await qc.cancelQueries();
@@ -47,6 +35,31 @@ function AuthedLayout() {
     await supabase.auth.signOut();
     navigate({ to: "/auth", replace: true });
   };
+
+  type Item = { title: string; url: string; icon: typeof LayoutDashboard };
+
+  const memberItems: Item[] = [
+    { title: "My Contributions", url: "/my-contributions", icon: Wallet },
+    { title: "My Loans", url: "/my-loans", icon: HandCoins },
+    { title: "Meetings", url: "/meetings", icon: CalendarDays },
+  ];
+
+  const financeItems: Item[] = [];
+  if (r.canViewFinancials) financeItems.push({ title: "Dashboard", url: "/dashboard", icon: LayoutDashboard });
+  if (r.canConfirmContribs) financeItems.push({ title: "Contributions Review", url: "/contributions-review", icon: ShieldCheck });
+  if (r.canViewFinancials) financeItems.push({ title: "Transactions", url: "/transactions", icon: Receipt });
+  if (r.canForwardLoans || r.isBoard || r.isAdmin) financeItems.push({ title: "Loan Requests", url: "/loans-review", icon: Landmark });
+  if (r.isBoard || r.isAdmin) financeItems.push({ title: "Board Votes", url: "/loan-votes", icon: Gavel });
+  if (r.isSecretary || r.isAdmin) financeItems.push({ title: "Donors", url: "/donors", icon: Users });
+
+  const adminItems: Item[] = [];
+  if (r.isAdmin) {
+    adminItems.push({ title: "Users & Roles", url: "/users", icon: Users });
+    adminItems.push({ title: "Loan Rules", url: "/loan-rules", icon: Settings });
+  }
+
+  const allItems = [...memberItems, ...financeItems, ...adminItems];
+  const activeTitle = allItems.find((i) => i.url === path)?.title ?? "Overview";
 
   return (
     <SidebarProvider>
@@ -66,11 +79,11 @@ function AuthedLayout() {
 
           <SidebarContent>
             <SidebarGroup>
-              <SidebarGroupLabel>Manage</SidebarGroupLabel>
+              <SidebarGroupLabel>My Account</SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
-                  {items.map((item) => (
-                    <SidebarMenuItem key={item.title}>
+                  {memberItems.map((item) => (
+                    <SidebarMenuItem key={item.url}>
                       <SidebarMenuButton asChild isActive={path === item.url}>
                         <Link to={item.url} className="flex items-center gap-2">
                           <item.icon className="h-4 w-4" />
@@ -82,13 +95,53 @@ function AuthedLayout() {
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
+
+            {financeItems.length > 0 && (
+              <SidebarGroup>
+                <SidebarGroupLabel>Foundation</SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {financeItems.map((item) => (
+                      <SidebarMenuItem key={item.url}>
+                        <SidebarMenuButton asChild isActive={path === item.url}>
+                          <Link to={item.url} className="flex items-center gap-2">
+                            <item.icon className="h-4 w-4" />
+                            <span>{item.title}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            )}
+
+            {adminItems.length > 0 && (
+              <SidebarGroup>
+                <SidebarGroupLabel>Admin</SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {adminItems.map((item) => (
+                      <SidebarMenuItem key={item.url}>
+                        <SidebarMenuButton asChild isActive={path === item.url}>
+                          <Link to={item.url} className="flex items-center gap-2">
+                            <item.icon className="h-4 w-4" />
+                            <span>{item.title}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            )}
           </SidebarContent>
 
           <SidebarFooter className="border-t border-sidebar-border">
             <div className="px-2 py-2 group-data-[collapsible=icon]:hidden">
               <div className="truncate text-xs text-sidebar-foreground/80">{user.email}</div>
               <div className="mt-0.5 text-[10px] uppercase tracking-wider text-gold">
-                {isAdmin ? "Administrator" : "Member"}
+                {r.roles.length ? r.roles.join(" · ").replace(/_/g, " ") : "Member"}
               </div>
             </div>
             <SidebarMenu>
@@ -106,13 +159,8 @@ function AuthedLayout() {
           <header className="flex h-14 items-center justify-between border-b border-border bg-background px-4">
             <div className="flex items-center gap-3">
               <SidebarTrigger />
-              <div className="font-serif text-lg font-semibold text-primary">
-                {items.find((i) => i.url === path)?.title ?? "Overview"}
-              </div>
+              <div className="font-serif text-lg font-semibold text-primary">{activeTitle}</div>
             </div>
-            {!isAdmin && (
-              <span className="rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground">Read only</span>
-            )}
           </header>
           <main className="flex-1 bg-background p-6">
             <Outlet />

@@ -12,9 +12,17 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthenticatedUsersRouteImport } from './routes/_authenticated/users'
 import { Route as AuthenticatedTransactionsRouteImport } from './routes/_authenticated/transactions'
+import { Route as AuthenticatedMyLoansRouteImport } from './routes/_authenticated/my-loans'
+import { Route as AuthenticatedMyContributionsRouteImport } from './routes/_authenticated/my-contributions'
+import { Route as AuthenticatedMeetingsRouteImport } from './routes/_authenticated/meetings'
+import { Route as AuthenticatedLoansReviewRouteImport } from './routes/_authenticated/loans-review'
+import { Route as AuthenticatedLoanVotesRouteImport } from './routes/_authenticated/loan-votes'
+import { Route as AuthenticatedLoanRulesRouteImport } from './routes/_authenticated/loan-rules'
 import { Route as AuthenticatedDonorsRouteImport } from './routes/_authenticated/donors'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedContributionsReviewRouteImport } from './routes/_authenticated/contributions-review'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -30,12 +38,49 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedUsersRoute = AuthenticatedUsersRouteImport.update({
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedTransactionsRoute =
   AuthenticatedTransactionsRouteImport.update({
     id: '/transactions',
     path: '/transactions',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedMyLoansRoute = AuthenticatedMyLoansRouteImport.update({
+  id: '/my-loans',
+  path: '/my-loans',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedMyContributionsRoute =
+  AuthenticatedMyContributionsRouteImport.update({
+    id: '/my-contributions',
+    path: '/my-contributions',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedMeetingsRoute = AuthenticatedMeetingsRouteImport.update({
+  id: '/meetings',
+  path: '/meetings',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedLoansReviewRoute =
+  AuthenticatedLoansReviewRouteImport.update({
+    id: '/loans-review',
+    path: '/loans-review',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedLoanVotesRoute = AuthenticatedLoanVotesRouteImport.update({
+  id: '/loan-votes',
+  path: '/loan-votes',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedLoanRulesRoute = AuthenticatedLoanRulesRouteImport.update({
+  id: '/loan-rules',
+  path: '/loan-rules',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedDonorsRoute = AuthenticatedDonorsRouteImport.update({
   id: '/donors',
   path: '/donors',
@@ -46,43 +91,107 @@ const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedContributionsReviewRoute =
+  AuthenticatedContributionsReviewRouteImport.update({
+    id: '/contributions-review',
+    path: '/contributions-review',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/contributions-review': typeof AuthenticatedContributionsReviewRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/donors': typeof AuthenticatedDonorsRoute
+  '/loan-rules': typeof AuthenticatedLoanRulesRoute
+  '/loan-votes': typeof AuthenticatedLoanVotesRoute
+  '/loans-review': typeof AuthenticatedLoansReviewRoute
+  '/meetings': typeof AuthenticatedMeetingsRoute
+  '/my-contributions': typeof AuthenticatedMyContributionsRoute
+  '/my-loans': typeof AuthenticatedMyLoansRoute
   '/transactions': typeof AuthenticatedTransactionsRoute
+  '/users': typeof AuthenticatedUsersRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/contributions-review': typeof AuthenticatedContributionsReviewRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/donors': typeof AuthenticatedDonorsRoute
+  '/loan-rules': typeof AuthenticatedLoanRulesRoute
+  '/loan-votes': typeof AuthenticatedLoanVotesRoute
+  '/loans-review': typeof AuthenticatedLoansReviewRoute
+  '/meetings': typeof AuthenticatedMeetingsRoute
+  '/my-contributions': typeof AuthenticatedMyContributionsRoute
+  '/my-loans': typeof AuthenticatedMyLoansRoute
   '/transactions': typeof AuthenticatedTransactionsRoute
+  '/users': typeof AuthenticatedUsersRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/_authenticated/contributions-review': typeof AuthenticatedContributionsReviewRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/donors': typeof AuthenticatedDonorsRoute
+  '/_authenticated/loan-rules': typeof AuthenticatedLoanRulesRoute
+  '/_authenticated/loan-votes': typeof AuthenticatedLoanVotesRoute
+  '/_authenticated/loans-review': typeof AuthenticatedLoansReviewRoute
+  '/_authenticated/meetings': typeof AuthenticatedMeetingsRoute
+  '/_authenticated/my-contributions': typeof AuthenticatedMyContributionsRoute
+  '/_authenticated/my-loans': typeof AuthenticatedMyLoansRoute
   '/_authenticated/transactions': typeof AuthenticatedTransactionsRoute
+  '/_authenticated/users': typeof AuthenticatedUsersRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/dashboard' | '/donors' | '/transactions'
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/contributions-review'
+    | '/dashboard'
+    | '/donors'
+    | '/loan-rules'
+    | '/loan-votes'
+    | '/loans-review'
+    | '/meetings'
+    | '/my-contributions'
+    | '/my-loans'
+    | '/transactions'
+    | '/users'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/dashboard' | '/donors' | '/transactions'
+  to:
+    | '/'
+    | '/auth'
+    | '/contributions-review'
+    | '/dashboard'
+    | '/donors'
+    | '/loan-rules'
+    | '/loan-votes'
+    | '/loans-review'
+    | '/meetings'
+    | '/my-contributions'
+    | '/my-loans'
+    | '/transactions'
+    | '/users'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
     | '/auth'
+    | '/_authenticated/contributions-review'
     | '/_authenticated/dashboard'
     | '/_authenticated/donors'
+    | '/_authenticated/loan-rules'
+    | '/_authenticated/loan-votes'
+    | '/_authenticated/loans-review'
+    | '/_authenticated/meetings'
+    | '/_authenticated/my-contributions'
+    | '/_authenticated/my-loans'
     | '/_authenticated/transactions'
+    | '/_authenticated/users'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -114,11 +223,60 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/users': {
+      id: '/_authenticated/users'
+      path: '/users'
+      fullPath: '/users'
+      preLoaderRoute: typeof AuthenticatedUsersRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/transactions': {
       id: '/_authenticated/transactions'
       path: '/transactions'
       fullPath: '/transactions'
       preLoaderRoute: typeof AuthenticatedTransactionsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/my-loans': {
+      id: '/_authenticated/my-loans'
+      path: '/my-loans'
+      fullPath: '/my-loans'
+      preLoaderRoute: typeof AuthenticatedMyLoansRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/my-contributions': {
+      id: '/_authenticated/my-contributions'
+      path: '/my-contributions'
+      fullPath: '/my-contributions'
+      preLoaderRoute: typeof AuthenticatedMyContributionsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/meetings': {
+      id: '/_authenticated/meetings'
+      path: '/meetings'
+      fullPath: '/meetings'
+      preLoaderRoute: typeof AuthenticatedMeetingsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/loans-review': {
+      id: '/_authenticated/loans-review'
+      path: '/loans-review'
+      fullPath: '/loans-review'
+      preLoaderRoute: typeof AuthenticatedLoansReviewRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/loan-votes': {
+      id: '/_authenticated/loan-votes'
+      path: '/loan-votes'
+      fullPath: '/loan-votes'
+      preLoaderRoute: typeof AuthenticatedLoanVotesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/loan-rules': {
+      id: '/_authenticated/loan-rules'
+      path: '/loan-rules'
+      fullPath: '/loan-rules'
+      preLoaderRoute: typeof AuthenticatedLoanRulesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/donors': {
@@ -135,19 +293,42 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/contributions-review': {
+      id: '/_authenticated/contributions-review'
+      path: '/contributions-review'
+      fullPath: '/contributions-review'
+      preLoaderRoute: typeof AuthenticatedContributionsReviewRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
   }
 }
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedContributionsReviewRoute: typeof AuthenticatedContributionsReviewRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedDonorsRoute: typeof AuthenticatedDonorsRoute
+  AuthenticatedLoanRulesRoute: typeof AuthenticatedLoanRulesRoute
+  AuthenticatedLoanVotesRoute: typeof AuthenticatedLoanVotesRoute
+  AuthenticatedLoansReviewRoute: typeof AuthenticatedLoansReviewRoute
+  AuthenticatedMeetingsRoute: typeof AuthenticatedMeetingsRoute
+  AuthenticatedMyContributionsRoute: typeof AuthenticatedMyContributionsRoute
+  AuthenticatedMyLoansRoute: typeof AuthenticatedMyLoansRoute
   AuthenticatedTransactionsRoute: typeof AuthenticatedTransactionsRoute
+  AuthenticatedUsersRoute: typeof AuthenticatedUsersRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedContributionsReviewRoute: AuthenticatedContributionsReviewRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedDonorsRoute: AuthenticatedDonorsRoute,
+  AuthenticatedLoanRulesRoute: AuthenticatedLoanRulesRoute,
+  AuthenticatedLoanVotesRoute: AuthenticatedLoanVotesRoute,
+  AuthenticatedLoansReviewRoute: AuthenticatedLoansReviewRoute,
+  AuthenticatedMeetingsRoute: AuthenticatedMeetingsRoute,
+  AuthenticatedMyContributionsRoute: AuthenticatedMyContributionsRoute,
+  AuthenticatedMyLoansRoute: AuthenticatedMyLoansRoute,
   AuthenticatedTransactionsRoute: AuthenticatedTransactionsRoute,
+  AuthenticatedUsersRoute: AuthenticatedUsersRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
@@ -161,13 +342,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
