@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -34,9 +35,12 @@ function Page() {
     queryFn: async () => (await supabase.from("loans").select("*").eq("member_id", user.id).order("created_at", { ascending: false })).data ?? [],
   });
 
-  const { data: rules } = useQuery({
+  const { data: rulesByType } = useQuery({
     queryKey: ["loan-rules"],
-    queryFn: async () => (await supabase.from("loan_rules").select("*").eq("active", true).maybeSingle()).data,
+    queryFn: async () => {
+      const { data } = await supabase.from("loan_rules").select("*").eq("active", true);
+      return Object.fromEntries((data ?? []).map((r) => [r.loan_type, r]));
+    },
   });
 
   const { data: confirmed = 0 } = useQuery({
@@ -48,12 +52,16 @@ function Page() {
   });
 
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ amount: "", purpose: "", repayment_months: "6" });
+  const [form, setForm] = useState<{ loan_type: "project" | "emergency"; amount: string; purpose: string; repayment_months: string }>({
+    loan_type: "project", amount: "", purpose: "", repayment_months: "6",
+  });
+  const activeRules = rulesByType?.[form.loan_type];
 
   const create = useMutation({
     mutationFn: async () => {
       const { error } = await supabase.from("loans").insert({
         member_id: user.id,
+        loan_type: form.loan_type,
         amount: Number(form.amount),
         purpose: form.purpose,
         repayment_months: Number(form.repayment_months),
@@ -63,7 +71,7 @@ function Page() {
     onSuccess: () => {
       toast.success("Loan request submitted");
       setOpen(false);
-      setForm({ amount: "", purpose: "", repayment_months: "6" });
+      setForm({ loan_type: "project", amount: "", purpose: "", repayment_months: "6" });
       qc.invalidateQueries({ queryKey: ["my-loans"] });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -82,12 +90,22 @@ function Page() {
           </DialogTrigger>
           <DialogContent>
             <DialogHeader><DialogTitle className="font-serif">Request a loan</DialogTitle></DialogHeader>
-            {rules && (
-              <div className="rounded-md border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
-                Eligibility: up to {rules.max_multiplier}× confirmed contributions (max {fmt(Number(rules.max_amount))}), repaid within {rules.max_repayment_months} months, minimum {rules.min_membership_days} days membership. Your confirmed contributions: <span className="font-medium text-foreground">{fmt(confirmed)}</span>.
-              </div>
-            )}
             <form onSubmit={(e) => { e.preventDefault(); create.mutate(); }} className="space-y-3">
+              <div>
+                <Label>Loan type</Label>
+                <Select value={form.loan_type} onValueChange={(v: "project" | "emergency") => setForm({ ...form, loan_type: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="project">Project loan</SelectItem>
+                    <SelectItem value="emergency">Emergency loan</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {activeRules && (
+                <div className="rounded-md border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+                  Eligibility: up to {activeRules.max_multiplier}× confirmed contributions (max {fmt(Number(activeRules.max_amount))}), repaid within {activeRules.max_repayment_months} months, minimum {activeRules.min_membership_days} days membership, {activeRules.interest_rate_percent}% interest. Your confirmed contributions: <span className="font-medium text-foreground">{fmt(confirmed)}</span>.
+                </div>
+              )}
               <div>
                 <Label>Amount (KES)</Label>
                 <Input type="number" min="1" step="1" required value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
@@ -113,6 +131,7 @@ function Page() {
           <TableHeader>
             <TableRow>
               <TableHead>Date</TableHead>
+              <TableHead>Type</TableHead>
               <TableHead>Purpose</TableHead>
               <TableHead>Repayment</TableHead>
               <TableHead>Eligibility</TableHead>
@@ -122,12 +141,13 @@ function Page() {
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">Loading…</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">Loading…</TableCell></TableRow>
             ) : loans.length === 0 ? (
-              <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">No loan requests yet.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">No loan requests yet.</TableCell></TableRow>
             ) : loans.map((l) => (
               <TableRow key={l.id}>
                 <TableCell>{new Date(l.created_at).toLocaleDateString()}</TableCell>
+                <TableCell><Badge variant="outline" className="capitalize">{l.loan_type}</Badge></TableCell>
                 <TableCell className="max-w-xs truncate">{l.purpose}</TableCell>
                 <TableCell>{l.repayment_months} mo</TableCell>
                 <TableCell className="max-w-xs text-xs text-muted-foreground">
