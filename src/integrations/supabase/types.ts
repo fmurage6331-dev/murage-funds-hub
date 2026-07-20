@@ -98,12 +98,13 @@ export type Database = {
         }
         Relationships: []
       }
-      loan_rules: {
+     loan_rules: {
         Row: {
           active: boolean
           created_at: string
           id: string
           interest_rate_percent: number
+          loan_type: Database["public"]["Enums"]["loan_type"]
           max_amount: number
           max_multiplier: number
           max_repayment_months: number
@@ -116,6 +117,7 @@ export type Database = {
           created_at?: string
           id?: string
           interest_rate_percent?: number
+          loan_type: Database["public"]["Enums"]["loan_type"]
           max_amount?: number
           max_multiplier?: number
           max_repayment_months?: number
@@ -128,6 +130,7 @@ export type Database = {
           created_at?: string
           id?: string
           interest_rate_percent?: number
+          loan_type?: Database["public"]["Enums"]["loan_type"]
           max_amount?: number
           max_multiplier?: number
           max_repayment_months?: number
@@ -182,6 +185,7 @@ export type Database = {
           forwarded_at: string | null
           forwarded_by: string | null
           id: string
+          loan_type: Database["public"]["Enums"]["loan_type"]
           member_id: string
           purpose: string
           rejection_reason: string | null
@@ -198,6 +202,7 @@ export type Database = {
           forwarded_at?: string | null
           forwarded_by?: string | null
           id?: string
+          loan_type?: Database["public"]["Enums"]["loan_type"]
           member_id: string
           purpose: string
           rejection_reason?: string | null
@@ -214,6 +219,7 @@ export type Database = {
           forwarded_at?: string | null
           forwarded_by?: string | null
           id?: string
+          loan_type?: Database["public"]["Enums"]["loan_type"]
           member_id?: string
           purpose?: string
           rejection_reason?: string | null
@@ -419,6 +425,7 @@ export type Database = {
         | "secretary"
         | "assistant_secretary"
         | "board_member"
+      loan_type: "project" | "emergency"
       transaction_type: "income" | "expense"
     }
     CompositeTypes: {
@@ -554,8 +561,9 @@ export const Constants = {
         "treasurer",
         "secretary",
         "assistant_secretary",
-        "board_member",
+       "board_member",
       ],
+      loan_type: ["project", "emergency"],
       transaction_type: ["income", "expense"],
     },
   },
