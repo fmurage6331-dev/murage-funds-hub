@@ -71,6 +71,7 @@ function Page() {
             <TableRow>
               <TableHead>Member</TableHead>
               <TableHead>Date</TableHead>
+              <TableHead>Type</TableHead>
               <TableHead>Purpose</TableHead>
               <TableHead>Repay</TableHead>
               <TableHead>Eligibility</TableHead>
@@ -81,9 +82,9 @@ function Page() {
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={8} className="py-8 text-center text-muted-foreground">Loading…</TableCell></TableRow>
+              <TableRow><TableCell colSpan={9} className="py-8 text-center text-muted-foreground">Loading…</TableCell></TableRow>
             ) : loans.length === 0 ? (
-              <TableRow><TableCell colSpan={8} className="py-8 text-center text-muted-foreground">No loan requests.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={9} className="py-8 text-center text-muted-foreground">No loan requests.</TableCell></TableRow>
             ) : loans.map((l) => {
               const p = (l as any).profiles;
               return (
@@ -93,6 +94,7 @@ function Page() {
                     <div className="text-xs text-muted-foreground">{p?.email}</div>
                   </TableCell>
                   <TableCell>{new Date(l.created_at).toLocaleDateString()}</TableCell>
+                  <TableCell><Badge variant="outline" className="capitalize">{l.loan_type}</Badge></TableCell>
                   <TableCell className="max-w-xs truncate">{l.purpose}</TableCell>
                   <TableCell>{l.repayment_months} mo</TableCell>
                   <TableCell className="max-w-[220px] text-xs">
