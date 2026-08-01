@@ -60,7 +60,15 @@ export type Database = {
           status?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "contributions_member_id_profiles_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       donors: {
         Row: {
@@ -98,7 +106,7 @@ export type Database = {
         }
         Relationships: []
       }
-     loan_rules: {
+      loan_rules: {
         Row: {
           active: boolean
           created_at: string
@@ -227,7 +235,15 @@ export type Database = {
           status?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "loans_member_id_profiles_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       meeting_minutes: {
         Row: {
@@ -303,6 +319,7 @@ export type Database = {
           email: string | null
           full_name: string | null
           id: string
+          status: string
           updated_at: string
         }
         Insert: {
@@ -310,6 +327,7 @@ export type Database = {
           email?: string | null
           full_name?: string | null
           id: string
+          status?: string
           updated_at?: string
         }
         Update: {
@@ -317,6 +335,7 @@ export type Database = {
           email?: string | null
           full_name?: string | null
           id?: string
+          status?: string
           updated_at?: string
         }
         Relationships: []
@@ -415,6 +434,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_approved: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
       app_role:
@@ -561,7 +581,7 @@ export const Constants = {
         "treasurer",
         "secretary",
         "assistant_secretary",
-       "board_member",
+        "board_member",
       ],
       loan_type: ["project", "emergency"],
       transaction_type: ["income", "expense"],
