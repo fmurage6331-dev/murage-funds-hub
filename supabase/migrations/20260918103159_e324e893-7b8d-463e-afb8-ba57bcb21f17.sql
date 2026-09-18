@@ -1,0 +1,1 @@
+REVOKE ALL ON FUNCTION public.log_audit_event() FROM public, anon, authenticated;
