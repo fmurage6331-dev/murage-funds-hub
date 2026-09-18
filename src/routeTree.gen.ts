@@ -9,25 +9,31 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as PendingApprovalRouteImport } from './routes/pending-approval'
-import { Route as AuthRouteImport } from './routes/auth'
-import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as AuthenticatedUsersRouteImport } from './routes/_authenticated/users'
-import { Route as AuthenticatedTransactionsRouteImport } from './routes/_authenticated/transactions'
-import { Route as AuthenticatedMyLoansRouteImport } from './routes/_authenticated/my-loans'
-import { Route as AuthenticatedMyContributionsRouteImport } from './routes/_authenticated/my-contributions'
-import { Route as AuthenticatedMeetingsRouteImport } from './routes/_authenticated/meetings'
-import { Route as AuthenticatedLoansReviewRouteImport } from './routes/_authenticated/loans-review'
-import { Route as AuthenticatedLoanVotesRouteImport } from './routes/_authenticated/loan-votes'
-import { Route as AuthenticatedLoanRulesRouteImport } from './routes/_authenticated/loan-rules'
-import { Route as AuthenticatedDonorsRouteImport } from './routes/_authenticated/donors'
-import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as PendingApprovalRouteImport } from './routes/pending-approval'
+import { Route as AuthenticatedAuditLogsRouteImport } from './routes/_authenticated/audit-logs'
 import { Route as AuthenticatedContributionsReviewRouteImport } from './routes/_authenticated/contributions-review'
+import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedDonorsRouteImport } from './routes/_authenticated/donors'
+import { Route as AuthenticatedFinancialStatementsRouteImport } from './routes/_authenticated/financial-statements'
+import { Route as AuthenticatedLoanRulesRouteImport } from './routes/_authenticated/loan-rules'
+import { Route as AuthenticatedLoanVotesRouteImport } from './routes/_authenticated/loan-votes'
+import { Route as AuthenticatedLoansReviewRouteImport } from './routes/_authenticated/loans-review'
+import { Route as AuthenticatedMeetingsRouteImport } from './routes/_authenticated/meetings'
+import { Route as AuthenticatedMyContributionsRouteImport } from './routes/_authenticated/my-contributions'
+import { Route as AuthenticatedMyLoansRouteImport } from './routes/_authenticated/my-loans'
+import { Route as AuthenticatedTransactionsRouteImport } from './routes/_authenticated/transactions'
+import { Route as AuthenticatedUsersRouteImport } from './routes/_authenticated/users'
 
-const PendingApprovalRoute = PendingApprovalRouteImport.update({
-  id: '/pending-approval',
-  path: '/pending-approval',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
+  id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -35,66 +41,14 @@ const AuthRoute = AuthRouteImport.update({
   path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
-  id: '/_authenticated',
+const PendingApprovalRoute = PendingApprovalRouteImport.update({
+  id: '/pending-approval',
+  path: '/pending-approval',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AuthenticatedUsersRoute = AuthenticatedUsersRouteImport.update({
-  id: '/users',
-  path: '/users',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedTransactionsRoute =
-  AuthenticatedTransactionsRouteImport.update({
-    id: '/transactions',
-    path: '/transactions',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedMyLoansRoute = AuthenticatedMyLoansRouteImport.update({
-  id: '/my-loans',
-  path: '/my-loans',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedMyContributionsRoute =
-  AuthenticatedMyContributionsRouteImport.update({
-    id: '/my-contributions',
-    path: '/my-contributions',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedMeetingsRoute = AuthenticatedMeetingsRouteImport.update({
-  id: '/meetings',
-  path: '/meetings',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedLoansReviewRoute =
-  AuthenticatedLoansReviewRouteImport.update({
-    id: '/loans-review',
-    path: '/loans-review',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedLoanVotesRoute = AuthenticatedLoanVotesRouteImport.update({
-  id: '/loan-votes',
-  path: '/loan-votes',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedLoanRulesRoute = AuthenticatedLoanRulesRouteImport.update({
-  id: '/loan-rules',
-  path: '/loan-rules',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedDonorsRoute = AuthenticatedDonorsRouteImport.update({
-  id: '/donors',
-  path: '/donors',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
+const AuthenticatedAuditLogsRoute = AuthenticatedAuditLogsRouteImport.update({
+  id: '/audit-logs',
+  path: '/audit-logs',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedContributionsReviewRoute =
@@ -103,14 +57,75 @@ const AuthenticatedContributionsReviewRoute =
     path: '/contributions-review',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedDonorsRoute = AuthenticatedDonorsRouteImport.update({
+  id: '/donors',
+  path: '/donors',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedFinancialStatementsRoute =
+  AuthenticatedFinancialStatementsRouteImport.update({
+    id: '/financial-statements',
+    path: '/financial-statements',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedLoanRulesRoute = AuthenticatedLoanRulesRouteImport.update({
+  id: '/loan-rules',
+  path: '/loan-rules',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedLoanVotesRoute = AuthenticatedLoanVotesRouteImport.update({
+  id: '/loan-votes',
+  path: '/loan-votes',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedLoansReviewRoute =
+  AuthenticatedLoansReviewRouteImport.update({
+    id: '/loans-review',
+    path: '/loans-review',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedMeetingsRoute = AuthenticatedMeetingsRouteImport.update({
+  id: '/meetings',
+  path: '/meetings',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedMyContributionsRoute =
+  AuthenticatedMyContributionsRouteImport.update({
+    id: '/my-contributions',
+    path: '/my-contributions',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedMyLoansRoute = AuthenticatedMyLoansRouteImport.update({
+  id: '/my-loans',
+  path: '/my-loans',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedTransactionsRoute =
+  AuthenticatedTransactionsRouteImport.update({
+    id: '/transactions',
+    path: '/transactions',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedUsersRoute = AuthenticatedUsersRouteImport.update({
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/pending-approval': typeof PendingApprovalRoute
+  '/audit-logs': typeof AuthenticatedAuditLogsRoute
   '/contributions-review': typeof AuthenticatedContributionsReviewRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/donors': typeof AuthenticatedDonorsRoute
+  '/financial-statements': typeof AuthenticatedFinancialStatementsRoute
   '/loan-rules': typeof AuthenticatedLoanRulesRoute
   '/loan-votes': typeof AuthenticatedLoanVotesRoute
   '/loans-review': typeof AuthenticatedLoansReviewRoute
@@ -124,9 +139,11 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/pending-approval': typeof PendingApprovalRoute
+  '/audit-logs': typeof AuthenticatedAuditLogsRoute
   '/contributions-review': typeof AuthenticatedContributionsReviewRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/donors': typeof AuthenticatedDonorsRoute
+  '/financial-statements': typeof AuthenticatedFinancialStatementsRoute
   '/loan-rules': typeof AuthenticatedLoanRulesRoute
   '/loan-votes': typeof AuthenticatedLoanVotesRoute
   '/loans-review': typeof AuthenticatedLoansReviewRoute
@@ -142,9 +159,11 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/pending-approval': typeof PendingApprovalRoute
+  '/_authenticated/audit-logs': typeof AuthenticatedAuditLogsRoute
   '/_authenticated/contributions-review': typeof AuthenticatedContributionsReviewRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/donors': typeof AuthenticatedDonorsRoute
+  '/_authenticated/financial-statements': typeof AuthenticatedFinancialStatementsRoute
   '/_authenticated/loan-rules': typeof AuthenticatedLoanRulesRoute
   '/_authenticated/loan-votes': typeof AuthenticatedLoanVotesRoute
   '/_authenticated/loans-review': typeof AuthenticatedLoansReviewRoute
@@ -160,9 +179,11 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/pending-approval'
+    | '/audit-logs'
     | '/contributions-review'
     | '/dashboard'
     | '/donors'
+    | '/financial-statements'
     | '/loan-rules'
     | '/loan-votes'
     | '/loans-review'
@@ -176,9 +197,11 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/pending-approval'
+    | '/audit-logs'
     | '/contributions-review'
     | '/dashboard'
     | '/donors'
+    | '/financial-statements'
     | '/loan-rules'
     | '/loan-votes'
     | '/loans-review'
@@ -193,9 +216,11 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/auth'
     | '/pending-approval'
+    | '/_authenticated/audit-logs'
     | '/_authenticated/contributions-review'
     | '/_authenticated/dashboard'
     | '/_authenticated/donors'
+    | '/_authenticated/financial-statements'
     | '/_authenticated/loan-rules'
     | '/_authenticated/loan-votes'
     | '/_authenticated/loans-review'
@@ -215,18 +240,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/pending-approval': {
-      id: '/pending-approval'
-      path: '/pending-approval'
-      fullPath: '/pending-approval'
-      preLoaderRoute: typeof PendingApprovalRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/auth': {
-      id: '/auth'
-      path: '/auth'
-      fullPath: '/auth'
-      preLoaderRoute: typeof AuthRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated': {
@@ -236,81 +254,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_authenticated/users': {
-      id: '/_authenticated/users'
-      path: '/users'
-      fullPath: '/users'
-      preLoaderRoute: typeof AuthenticatedUsersRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
+    '/pending-approval': {
+      id: '/pending-approval'
+      path: '/pending-approval'
+      fullPath: '/pending-approval'
+      preLoaderRoute: typeof PendingApprovalRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_authenticated/transactions': {
-      id: '/_authenticated/transactions'
-      path: '/transactions'
-      fullPath: '/transactions'
-      preLoaderRoute: typeof AuthenticatedTransactionsRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/my-loans': {
-      id: '/_authenticated/my-loans'
-      path: '/my-loans'
-      fullPath: '/my-loans'
-      preLoaderRoute: typeof AuthenticatedMyLoansRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/my-contributions': {
-      id: '/_authenticated/my-contributions'
-      path: '/my-contributions'
-      fullPath: '/my-contributions'
-      preLoaderRoute: typeof AuthenticatedMyContributionsRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/meetings': {
-      id: '/_authenticated/meetings'
-      path: '/meetings'
-      fullPath: '/meetings'
-      preLoaderRoute: typeof AuthenticatedMeetingsRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/loans-review': {
-      id: '/_authenticated/loans-review'
-      path: '/loans-review'
-      fullPath: '/loans-review'
-      preLoaderRoute: typeof AuthenticatedLoansReviewRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/loan-votes': {
-      id: '/_authenticated/loan-votes'
-      path: '/loan-votes'
-      fullPath: '/loan-votes'
-      preLoaderRoute: typeof AuthenticatedLoanVotesRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/loan-rules': {
-      id: '/_authenticated/loan-rules'
-      path: '/loan-rules'
-      fullPath: '/loan-rules'
-      preLoaderRoute: typeof AuthenticatedLoanRulesRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/donors': {
-      id: '/_authenticated/donors'
-      path: '/donors'
-      fullPath: '/donors'
-      preLoaderRoute: typeof AuthenticatedDonorsRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/dashboard': {
-      id: '/_authenticated/dashboard'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof AuthenticatedDashboardRouteImport
+    '/_authenticated/audit-logs': {
+      id: '/_authenticated/audit-logs'
+      path: '/audit-logs'
+      fullPath: '/audit-logs'
+      preLoaderRoute: typeof AuthenticatedAuditLogsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/contributions-review': {
@@ -320,13 +282,92 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedContributionsReviewRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/dashboard': {
+      id: '/_authenticated/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof AuthenticatedDashboardRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/donors': {
+      id: '/_authenticated/donors'
+      path: '/donors'
+      fullPath: '/donors'
+      preLoaderRoute: typeof AuthenticatedDonorsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/financial-statements': {
+      id: '/_authenticated/financial-statements'
+      path: '/financial-statements'
+      fullPath: '/financial-statements'
+      preLoaderRoute: typeof AuthenticatedFinancialStatementsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/loan-rules': {
+      id: '/_authenticated/loan-rules'
+      path: '/loan-rules'
+      fullPath: '/loan-rules'
+      preLoaderRoute: typeof AuthenticatedLoanRulesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/loan-votes': {
+      id: '/_authenticated/loan-votes'
+      path: '/loan-votes'
+      fullPath: '/loan-votes'
+      preLoaderRoute: typeof AuthenticatedLoanVotesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/loans-review': {
+      id: '/_authenticated/loans-review'
+      path: '/loans-review'
+      fullPath: '/loans-review'
+      preLoaderRoute: typeof AuthenticatedLoansReviewRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/meetings': {
+      id: '/_authenticated/meetings'
+      path: '/meetings'
+      fullPath: '/meetings'
+      preLoaderRoute: typeof AuthenticatedMeetingsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/my-contributions': {
+      id: '/_authenticated/my-contributions'
+      path: '/my-contributions'
+      fullPath: '/my-contributions'
+      preLoaderRoute: typeof AuthenticatedMyContributionsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/my-loans': {
+      id: '/_authenticated/my-loans'
+      path: '/my-loans'
+      fullPath: '/my-loans'
+      preLoaderRoute: typeof AuthenticatedMyLoansRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/transactions': {
+      id: '/_authenticated/transactions'
+      path: '/transactions'
+      fullPath: '/transactions'
+      preLoaderRoute: typeof AuthenticatedTransactionsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/users': {
+      id: '/_authenticated/users'
+      path: '/users'
+      fullPath: '/users'
+      preLoaderRoute: typeof AuthenticatedUsersRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
   }
 }
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedAuditLogsRoute: typeof AuthenticatedAuditLogsRoute
   AuthenticatedContributionsReviewRoute: typeof AuthenticatedContributionsReviewRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedDonorsRoute: typeof AuthenticatedDonorsRoute
+  AuthenticatedFinancialStatementsRoute: typeof AuthenticatedFinancialStatementsRoute
   AuthenticatedLoanRulesRoute: typeof AuthenticatedLoanRulesRoute
   AuthenticatedLoanVotesRoute: typeof AuthenticatedLoanVotesRoute
   AuthenticatedLoansReviewRoute: typeof AuthenticatedLoansReviewRoute
@@ -338,9 +379,11 @@ interface AuthenticatedRouteRouteChildren {
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedAuditLogsRoute: AuthenticatedAuditLogsRoute,
   AuthenticatedContributionsReviewRoute: AuthenticatedContributionsReviewRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedDonorsRoute: AuthenticatedDonorsRoute,
+  AuthenticatedFinancialStatementsRoute: AuthenticatedFinancialStatementsRoute,
   AuthenticatedLoanRulesRoute: AuthenticatedLoanRulesRoute,
   AuthenticatedLoanVotesRoute: AuthenticatedLoanVotesRoute,
   AuthenticatedLoansReviewRoute: AuthenticatedLoansReviewRoute,
