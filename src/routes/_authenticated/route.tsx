@@ -1,14 +1,42 @@
-import { createFileRoute, Outlet, redirect, Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Outlet,
+  redirect,
+  Link,
+  useNavigate,
+  useRouterState,
+} from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
-  SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger,
-  SidebarHeader, SidebarFooter,
+  Sidebar,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarTrigger,
+  SidebarHeader,
+  SidebarFooter,
 } from "@/components/ui/sidebar";
 import {
-  LayoutDashboard, Receipt, Users, LogOut, Leaf, HandCoins, Landmark,
-  CalendarDays, ShieldCheck, Settings, Wallet, Gavel,
+  LayoutDashboard,
+  Receipt,
+  Users,
+  LogOut,
+  Leaf,
+  HandCoins,
+  Landmark,
+  CalendarDays,
+  ShieldCheck,
+  Settings,
+  Wallet,
+  Gavel,
+  ScrollText,
+  FileSpreadsheet,
 } from "lucide-react";
 import { useRoles } from "@/hooks/use-roles";
 
@@ -54,12 +82,30 @@ function AuthedLayout() {
   ];
 
   const financeItems: Item[] = [];
-  if (r.canViewFinancials) financeItems.push({ title: "Dashboard", url: "/dashboard", icon: LayoutDashboard });
-  if (r.canConfirmContribs) financeItems.push({ title: "Contributions Review", url: "/contributions-review", icon: ShieldCheck });
-  if (r.canViewFinancials) financeItems.push({ title: "Transactions", url: "/transactions", icon: Receipt });
-  if (r.canForwardLoans || r.isBoard || r.isAdmin) financeItems.push({ title: "Loan Requests", url: "/loans-review", icon: Landmark });
-  if (r.isBoard || r.isAdmin) financeItems.push({ title: "Board Votes", url: "/loan-votes", icon: Gavel });
-  if (r.isSecretary || r.isAdmin) financeItems.push({ title: "Donors", url: "/donors", icon: Users });
+  if (r.canViewFinancials)
+    financeItems.push({ title: "Dashboard", url: "/dashboard", icon: LayoutDashboard });
+  if (r.canConfirmContribs)
+    financeItems.push({
+      title: "Contributions Review",
+      url: "/contributions-review",
+      icon: ShieldCheck,
+    });
+  if (r.canViewFinancials)
+    financeItems.push({ title: "Transactions", url: "/transactions", icon: Receipt });
+  if (r.canViewFinancials)
+    financeItems.push({
+      title: "Financial Statements",
+      url: "/financial-statements",
+      icon: FileSpreadsheet,
+    });
+  if (r.canForwardLoans || r.isBoard || r.isAdmin)
+    financeItems.push({ title: "Loan Requests", url: "/loans-review", icon: Landmark });
+  if (r.isBoard || r.isAdmin)
+    financeItems.push({ title: "Board Votes", url: "/loan-votes", icon: Gavel });
+  if (r.isSecretary || r.isAdmin)
+    financeItems.push({ title: "Donors", url: "/donors", icon: Users });
+  if (r.canViewFinancials || r.isAdmin)
+    financeItems.push({ title: "Audit Trail", url: "/audit-logs", icon: ScrollText });
 
   const adminItems: Item[] = [];
   if (r.isAdmin) {
@@ -80,8 +126,12 @@ function AuthedLayout() {
                 <Leaf className="h-4 w-4" />
               </div>
               <div className="min-w-0 group-data-[collapsible=icon]:hidden">
-                <div className="truncate font-serif text-sm font-semibold text-sidebar-foreground">Murage Foundation</div>
-                <div className="truncate text-[10px] uppercase tracking-wider text-sidebar-foreground/60">Financial Records</div>
+                <div className="truncate font-serif text-sm font-semibold text-sidebar-foreground">
+                  Murage Foundation
+                </div>
+                <div className="truncate text-[10px] uppercase tracking-wider text-sidebar-foreground/60">
+                  Financial Records
+                </div>
               </div>
             </div>
           </SidebarHeader>

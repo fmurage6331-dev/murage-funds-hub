@@ -2,23 +2,40 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Send } from "lucide-react";
 import { toast } from "sonner";
 import { useRoles } from "@/hooks/use-roles";
+import { RepaymentScheduleDialog } from "@/components/loans/RepaymentScheduleDialog";
+import { notifyLoanStatusChange } from "@/lib/notifications";
 
 export const Route = createFileRoute("/_authenticated/loans-review")({
   component: Page,
 });
 
-const fmt = (n: number) => new Intl.NumberFormat("en-KE", { style: "currency", currency: "KES", maximumFractionDigits: 0 }).format(n);
+const fmt = (n: number) =>
+  new Intl.NumberFormat("en-KE", {
+    style: "currency",
+    currency: "KES",
+    maximumFractionDigits: 0,
+  }).format(n);
 const statusColor = (s: string) =>
-  s === "approved" ? "bg-success text-success-foreground" :
-  s === "rejected" ? "bg-destructive/10 text-destructive" :
-  s === "forwarded" ? "bg-primary/10 text-primary" :
-  "bg-gold/20 text-gold";
+  s === "approved"
+    ? "bg-success text-success-foreground"
+    : s === "rejected"
+      ? "bg-destructive/10 text-destructive"
+      : s === "forwarded"
+        ? "bg-primary/10 text-primary"
+        : "bg-gold/20 text-gold";
 
 function Page() {
   const { user } = Route.useRouteContext();
@@ -28,42 +45,91 @@ function Page() {
   const { data: loans = [], isLoading } = useQuery({
     queryKey: ["loans", "review"],
     enabled: r.canForwardLoans || r.isBoard || r.isAdmin,
-    queryFn: async () => (await supabase.from("loans").select("*, profiles:member_id(full_name, email)").order("created_at", { ascending: false })).data ?? [],
+    queryFn: async () =>
+      (
+        await supabase
+          .from("loans")
+          .select("*, profiles:member_id(full_name, email), loan_repayments(*)")
+          .order("created_at", { ascending: false })
+      ).data ?? [],
   });
 
   const forward = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("loans").update({
-        status: "forwarded", forwarded_by: user.id, forwarded_at: new Date().toISOString(),
-      }).eq("id", id);
+    mutationFn: async ({ id, loan }: { id: string; loan?: any }) => {
+      const { error } = await supabase
+        .from("loans")
+        .update({
+          status: "forwarded",
+          forwarded_by: user.id,
+          forwarded_at: new Date().toISOString(),
+        })
+        .eq("id", id);
       if (error) throw error;
+
+      if (loan?.profiles?.email) {
+        notifyLoanStatusChange({
+          memberEmail: loan.profiles.email,
+          memberName: loan.profiles.full_name,
+          loanAmount: Number(loan.amount),
+          loanType: loan.loan_type,
+          status: "forwarded",
+          repaymentMonths: loan.repayment_months,
+        }).catch((e) => console.warn("Failed sending loan status notification", e));
+      }
     },
-    onSuccess: () => { toast.success("Forwarded to board"); qc.invalidateQueries({ queryKey: ["loans"] }); },
+    onSuccess: () => {
+      toast.success("Forwarded to board");
+      qc.invalidateQueries({ queryKey: ["loans"] });
+    },
     onError: (e: Error) => toast.error(e.message),
   });
 
   const reject = useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async ({ id, loan }: { id: string; loan?: any }) => {
       const reason = prompt("Rejection reason?") ?? "";
       if (!reason) throw new Error("Reason required");
-      const { error } = await supabase.from("loans").update({
-        status: "rejected", decision_at: new Date().toISOString(), rejection_reason: reason,
-      }).eq("id", id);
+      const { error } = await supabase
+        .from("loans")
+        .update({
+          status: "rejected",
+          decision_at: new Date().toISOString(),
+          rejection_reason: reason,
+        })
+        .eq("id", id);
       if (error) throw error;
+
+      if (loan?.profiles?.email) {
+        notifyLoanStatusChange({
+          memberEmail: loan.profiles.email,
+          memberName: loan.profiles.full_name,
+          loanAmount: Number(loan.amount),
+          loanType: loan.loan_type,
+          status: "rejected",
+          reason,
+          repaymentMonths: loan.repayment_months,
+        }).catch((e) => console.warn("Failed sending loan status notification", e));
+      }
     },
-    onSuccess: () => { toast.success("Rejected"); qc.invalidateQueries({ queryKey: ["loans"] }); },
+    onSuccess: () => {
+      toast.success("Rejected");
+      qc.invalidateQueries({ queryKey: ["loans"] });
+    },
     onError: (e: Error) => toast.error(e.message),
   });
 
   if (!(r.canForwardLoans || r.isBoard || r.isAdmin)) {
-    return <div className="text-sm text-muted-foreground">You do not have access to loan reviews.</div>;
+    return (
+      <div className="text-sm text-muted-foreground">You do not have access to loan reviews.</div>
+    );
   }
 
   return (
     <div className="mx-auto max-w-6xl space-y-4">
       <div>
         <h2 className="font-serif text-2xl font-semibold text-primary">Loan Requests</h2>
-        <p className="text-sm text-muted-foreground">Chairman or treasurer forwards eligible requests to the board.</p>
+        <p className="text-sm text-muted-foreground">
+          Chairman or treasurer forwards eligible requests to the board.
+        </p>
       </div>
       <Card>
         <Table>
@@ -82,42 +148,93 @@ function Page() {
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={9} className="py-8 text-center text-muted-foreground">Loading…</TableCell></TableRow>
+              <TableRow>
+                <TableCell colSpan={9} className="py-8 text-center text-muted-foreground">
+                  Loading…
+                </TableCell>
+              </TableRow>
             ) : loans.length === 0 ? (
-              <TableRow><TableCell colSpan={9} className="py-8 text-center text-muted-foreground">No loan requests.</TableCell></TableRow>
-            ) : loans.map((l) => {
-              const p = (l as any).profiles;
-              return (
-                <TableRow key={l.id}>
-                  <TableCell>
-                    <div className="font-medium">{p?.full_name ?? "—"}</div>
-                    <div className="text-xs text-muted-foreground">{p?.email}</div>
-                  </TableCell>
-                  <TableCell>{new Date(l.created_at).toLocaleDateString()}</TableCell>
-                  <TableCell><Badge variant="outline" className="capitalize">{l.loan_type}</Badge></TableCell>
-                  <TableCell className="max-w-xs truncate">{l.purpose}</TableCell>
-                  <TableCell>{l.repayment_months} mo</TableCell>
-                  <TableCell className="max-w-[220px] text-xs">
-                    <div className={l.auto_eligible ? "text-success" : "text-destructive"}>
-                      {l.auto_eligible ? "Meets criteria" : "Below criteria"}
-                    </div>
-                    <div className="text-muted-foreground">{l.eligibility_note}</div>
-                  </TableCell>
-                  <TableCell><Badge className={statusColor(l.status)}>{l.status}</Badge></TableCell>
-                  <TableCell className="text-right font-medium">{fmt(Number(l.amount))}</TableCell>
-                  <TableCell>
-                    {l.status === "submitted" && r.canForwardLoans && (
-                      <div className="flex gap-1">
-                        <Button size="sm" onClick={() => forward.mutate(l.id)}>
-                          <Send className="mr-1 h-3 w-3" /> Forward
-                        </Button>
-                        <Button size="sm" variant="ghost" onClick={() => reject.mutate(l.id)}>Reject</Button>
+              <TableRow>
+                <TableCell colSpan={9} className="py-8 text-center text-muted-foreground">
+                  No loan requests.
+                </TableCell>
+              </TableRow>
+            ) : (
+              loans.map((l) => {
+                const p = (l as any).profiles;
+                return (
+                  <TableRow key={l.id}>
+                    <TableCell>
+                      <div className="font-medium">{p?.full_name ?? "—"}</div>
+                      <div className="text-xs text-muted-foreground">{p?.email}</div>
+                    </TableCell>
+                    <TableCell>{new Date(l.created_at).toLocaleDateString()}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="capitalize">
+                        {l.loan_type}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="max-w-xs truncate">{l.purpose}</TableCell>
+                    <TableCell>{l.repayment_months} mo</TableCell>
+                    <TableCell className="max-w-[220px] text-xs">
+                      <div className={l.auto_eligible ? "text-success" : "text-destructive"}>
+                        {l.auto_eligible ? "Meets criteria" : "Below criteria"}
                       </div>
-                    )}
-                  </TableCell>
-                </TableRow>
-              );
-            })}
+                      <div className="text-muted-foreground">{l.eligibility_note}</div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-1">
+                        <Badge className={statusColor(l.status)}>{l.status}</Badge>
+                        {l.status === "approved" &&
+                          (() => {
+                            const reps = (l as any).loan_repayments || [];
+                            const overdueCount = reps.filter(
+                              (r: any) =>
+                                r.status === "overdue" ||
+                                (new Date(r.due_date) < new Date() &&
+                                  Number(r.amount_paid) < Number(r.amount_due)),
+                            ).length;
+                            return overdueCount > 0 ? (
+                              <Badge
+                                variant="destructive"
+                                className="text-[10px] px-1 py-0 justify-center"
+                              >
+                                ⚠️ {overdueCount} Overdue
+                              </Badge>
+                            ) : null;
+                          })()}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right font-medium">
+                      {fmt(Number(l.amount))}
+                    </TableCell>
+                    <TableCell>
+                      {l.status === "submitted" && r.canForwardLoans && (
+                        <div className="flex gap-1">
+                          <Button size="sm" onClick={() => forward.mutate({ id: l.id, loan: l })}>
+                            <Send className="mr-1 h-3 w-3" /> Forward
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => reject.mutate({ id: l.id, loan: l })}
+                          >
+                            Reject
+                          </Button>
+                        </div>
+                      )}
+                      {l.status === "approved" && (
+                        <RepaymentScheduleDialog
+                          loan={l}
+                          canRecordPayment={r.canConfirmContribs || r.isAdmin}
+                          memberEmail={p?.email}
+                        />
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            )}
           </TableBody>
         </Table>
       </Card>
