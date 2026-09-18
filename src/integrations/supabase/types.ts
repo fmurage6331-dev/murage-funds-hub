@@ -199,6 +199,13 @@ export type Database = {
             foreignKeyName: "loan_repayments_loan_id_fkey"
             columns: ["loan_id"]
             isOneToOne: false
+            referencedRelation: "loan_risk_flags"
+            referencedColumns: ["loan_id"]
+          },
+          {
+            foreignKeyName: "loan_repayments_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
             referencedRelation: "loans"
             referencedColumns: ["id"]
           },
@@ -272,6 +279,13 @@ export type Database = {
           vote?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "loan_votes_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "loan_risk_flags"
+            referencedColumns: ["loan_id"]
+          },
           {
             foreignKeyName: "loan_votes_loan_id_fkey"
             columns: ["loan_id"]
@@ -532,7 +546,28 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      loan_risk_flags: {
+        Row: {
+          loan_amount: number | null
+          loan_id: string | null
+          loan_type: Database["public"]["Enums"]["loan_type"] | null
+          max_days_overdue: number | null
+          member_email: string | null
+          member_id: string | null
+          member_name: string | null
+          risk_tier: string | null
+          total_overdue_amount: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loans_member_id_profiles_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       board_majority_count: { Args: never; Returns: number }
