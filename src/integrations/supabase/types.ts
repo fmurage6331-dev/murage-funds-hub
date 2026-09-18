@@ -14,6 +14,45 @@ export type Database = {
   }
   public: {
     Tables: {
+      audit_logs: {
+        Row: {
+          action: string
+          changed_fields: string[] | null
+          created_at: string
+          id: string
+          new_values: Json | null
+          old_values: Json | null
+          performed_by: string | null
+          performed_by_email: string | null
+          record_id: string | null
+          table_name: string
+        }
+        Insert: {
+          action: string
+          changed_fields?: string[] | null
+          created_at?: string
+          id?: string
+          new_values?: Json | null
+          old_values?: Json | null
+          performed_by?: string | null
+          performed_by_email?: string | null
+          record_id?: string | null
+          table_name: string
+        }
+        Update: {
+          action?: string
+          changed_fields?: string[] | null
+          created_at?: string
+          id?: string
+          new_values?: Json | null
+          old_values?: Json | null
+          performed_by?: string | null
+          performed_by_email?: string | null
+          record_id?: string | null
+          table_name?: string
+        }
+        Relationships: []
+      }
       contributions: {
         Row: {
           amount: number
@@ -374,26 +413,44 @@ export type Database = {
       }
       profiles: {
         Row: {
+          anonymized_at: string | null
+          consent_given: boolean
+          consent_timestamp: string | null
+          consent_version: string | null
           created_at: string
+          data_retention_until: string | null
           email: string | null
           full_name: string | null
           id: string
+          is_anonymized: boolean
           status: string
           updated_at: string
         }
         Insert: {
+          anonymized_at?: string | null
+          consent_given?: boolean
+          consent_timestamp?: string | null
+          consent_version?: string | null
           created_at?: string
+          data_retention_until?: string | null
           email?: string | null
           full_name?: string | null
           id: string
+          is_anonymized?: boolean
           status?: string
           updated_at?: string
         }
         Update: {
+          anonymized_at?: string | null
+          consent_given?: boolean
+          consent_timestamp?: string | null
+          consent_version?: string | null
           created_at?: string
+          data_retention_until?: string | null
           email?: string | null
           full_name?: string | null
           id?: string
+          is_anonymized?: boolean
           status?: string
           updated_at?: string
         }
