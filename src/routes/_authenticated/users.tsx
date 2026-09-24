@@ -1,5 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PendingBotRegistrations } from "@/components/users/PendingBotRegistrations";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import {
@@ -54,6 +57,40 @@ function Page() {
       }));
     },
   });
+
+  const { data: botPendingCount = 0 } = useQuery({
+    queryKey: ["pending-bot-count"],
+    enabled: r.isAdmin,
+    queryFn: async () => {
+      try {
+        const { count, error } = await supabase
+          .from("pending_registrations")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "pending");
+        if (error) throw error;
+        return count ?? 0;
+      } catch (error) {
+        console.error("[users] pending registration count failed", error);
+        throw error;
+      }
+    },
+  });
+
+  useEffect(() => {
+    if (!r.isAdmin) return;
+    const subscription = supabase
+      .channel("registration-review-count")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "pending_registrations" },
+        () => {
+          void qc.invalidateQueries({ queryKey: ["pending-bot-count"] });
+          void qc.invalidateQueries({ queryKey: ["pending-bot-registrations"] });
+        },
+      )
+      .subscribe();
+    return () => { void supabase.removeChannel(subscription); };
+  }, [r.isAdmin, qc]);
 
   const pending = profiles.filter((p) => p.status === "pending");
   const users = profiles.filter((p) => p.status === "approved");
@@ -133,6 +170,14 @@ function Page() {
         </p>
       </div>
 
+      <Tabs defaultValue="members" className="space-y-5">
+        <TabsList className="h-auto flex-wrap">
+          <TabsTrigger value="members">Members & Roles</TabsTrigger>
+          <TabsTrigger value="registrations" className="gap-2">
+            Pending Registrations <Badge variant="secondary">{botPendingCount}</Badge>
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="members" className="space-y-8">
       {pending.length > 0 && (
         <div className="space-y-2">
           <h3 className="text-sm font-semibold text-muted-foreground">
@@ -288,6 +333,11 @@ function Page() {
           </Table>
         </Card>
       </div>
+        </TabsContent>
+        <TabsContent value="registrations">
+          <PendingBotRegistrations />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

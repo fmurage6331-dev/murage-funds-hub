@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as PendingApprovalRouteImport } from './routes/pending-approval'
+import { Route as SetPasswordRouteImport } from './routes/set-password'
 import { Route as AuthenticatedAuditLogsRouteImport } from './routes/_authenticated/audit-logs'
 import { Route as AuthenticatedContributionsReviewRouteImport } from './routes/_authenticated/contributions-review'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
@@ -44,6 +45,11 @@ const AuthRoute = AuthRouteImport.update({
 const PendingApprovalRoute = PendingApprovalRouteImport.update({
   id: '/pending-approval',
   path: '/pending-approval',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SetPasswordRoute = SetPasswordRouteImport.update({
+  id: '/set-password',
+  path: '/set-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedAuditLogsRoute = AuthenticatedAuditLogsRouteImport.update({
@@ -121,6 +127,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/pending-approval': typeof PendingApprovalRoute
+  '/set-password': typeof SetPasswordRoute
   '/audit-logs': typeof AuthenticatedAuditLogsRoute
   '/contributions-review': typeof AuthenticatedContributionsReviewRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
@@ -139,6 +146,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/pending-approval': typeof PendingApprovalRoute
+  '/set-password': typeof SetPasswordRoute
   '/audit-logs': typeof AuthenticatedAuditLogsRoute
   '/contributions-review': typeof AuthenticatedContributionsReviewRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
@@ -159,6 +167,7 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/pending-approval': typeof PendingApprovalRoute
+  '/set-password': typeof SetPasswordRoute
   '/_authenticated/audit-logs': typeof AuthenticatedAuditLogsRoute
   '/_authenticated/contributions-review': typeof AuthenticatedContributionsReviewRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
@@ -179,6 +188,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/pending-approval'
+    | '/set-password'
     | '/audit-logs'
     | '/contributions-review'
     | '/dashboard'
@@ -197,6 +207,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/pending-approval'
+    | '/set-password'
     | '/audit-logs'
     | '/contributions-review'
     | '/dashboard'
@@ -216,6 +227,7 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/auth'
     | '/pending-approval'
+    | '/set-password'
     | '/_authenticated/audit-logs'
     | '/_authenticated/contributions-review'
     | '/_authenticated/dashboard'
@@ -236,6 +248,7 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
   PendingApprovalRoute: typeof PendingApprovalRoute
+  SetPasswordRoute: typeof SetPasswordRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -266,6 +279,13 @@ declare module '@tanstack/react-router' {
       path: '/pending-approval'
       fullPath: '/pending-approval'
       preLoaderRoute: typeof PendingApprovalRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/set-password': {
+      id: '/set-password'
+      path: '/set-password'
+      fullPath: '/set-password'
+      preLoaderRoute: typeof SetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/audit-logs': {
@@ -402,6 +422,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
   PendingApprovalRoute: PendingApprovalRoute,
+  SetPasswordRoute: SetPasswordRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
