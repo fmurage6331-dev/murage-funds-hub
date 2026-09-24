@@ -1,1 +1,15 @@
-project_id = "esucatyqgyouvmitrkrm"
+project_id = "cbfciiehhpkpdtxrltrc"
+
+# Africa's Talking sends form-encoded callbacks without a Supabase JWT.
+# whatsapp-bot requires AFRICASTALKING_WEBHOOK_SECRET in the callback URL instead.
+[functions.whatsapp-bot]
+verify_jwt = false
+
+[functions.manage-registration]
+verify_jwt = true
+
+[functions.bot-notifications]
+verify_jwt = true
+
+[functions.send-email]
+verify_jwt = true

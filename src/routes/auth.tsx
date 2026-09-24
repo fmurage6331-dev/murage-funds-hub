@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Leaf, ShieldCheck } from "lucide-react";
+import { Leaf } from "lucide-react";
 
 export const Route = createFileRoute("/auth")({
   component: AuthPage,

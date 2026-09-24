@@ -146,7 +146,7 @@ function TransactionsPage() {
         String(t.amount),
         t.currency,
         t.description ?? "",
-        (t as any).donors?.name ?? "",
+        t.donors?.name ?? "",
         t.reference ?? "",
       ]),
     );
@@ -352,9 +352,7 @@ function TransactionsPage() {
                     </Badge>
                   </TableCell>
                   <TableCell>{t.category}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {(t as any).donors?.name ?? "—"}
-                  </TableCell>
+                  <TableCell className="text-muted-foreground">{t.donors?.name ?? "—"}</TableCell>
                   <TableCell className="max-w-xs truncate text-muted-foreground">
                     {t.description ?? "—"}
                   </TableCell>

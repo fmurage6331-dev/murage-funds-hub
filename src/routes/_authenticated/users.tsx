@@ -1,5 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PendingBotRegistrations } from "@/components/users/PendingBotRegistrations";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import {
@@ -54,6 +57,42 @@ function Page() {
       }));
     },
   });
+
+  const { data: botPendingCount = 0 } = useQuery({
+    queryKey: ["pending-bot-count"],
+    enabled: r.isAdmin,
+    queryFn: async () => {
+      try {
+        const { count, error } = await supabase
+          .from("pending_registrations")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "pending");
+        if (error) throw error;
+        return count ?? 0;
+      } catch (error) {
+        console.error("[users] pending registration count failed", error);
+        throw error;
+      }
+    },
+  });
+
+  useEffect(() => {
+    if (!r.isAdmin) return;
+    const subscription = supabase
+      .channel("registration-review-count")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "pending_registrations" },
+        () => {
+          void qc.invalidateQueries({ queryKey: ["pending-bot-count"] });
+          void qc.invalidateQueries({ queryKey: ["pending-bot-registrations"] });
+        },
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(subscription);
+    };
+  }, [r.isAdmin, qc]);
 
   const pending = profiles.filter((p) => p.status === "pending");
   const users = profiles.filter((p) => p.status === "approved");
@@ -133,161 +172,176 @@ function Page() {
         </p>
       </div>
 
-      {pending.length > 0 && (
-        <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-muted-foreground">
-            Pending Approval <Badge variant="secondary">{pending.length}</Badge>
-          </h3>
-          <Card>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>User</TableHead>
-                  <TableHead>Requested</TableHead>
-                  <TableHead className="w-40 text-right">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {pending.map((p) => (
-                  <TableRow key={p.id}>
-                    <TableCell>
-                      <div className="font-medium">{p.full_name ?? "—"}</div>
-                      <div className="text-xs text-muted-foreground">{p.email}</div>
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {p.created_at ? new Date(p.created_at).toLocaleDateString() : "—"}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex justify-end gap-1">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 text-xs"
-                          disabled={approveUser.isPending}
-                          onClick={() => approveUser.mutate(p.id)}
-                        >
-                          <Check className="mr-1 h-3 w-3" /> Approve
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 text-xs text-destructive hover:text-destructive"
-                          disabled={rejectUser.isPending}
-                          onClick={() => rejectUser.mutate(p.id)}
-                        >
-                          <Ban className="mr-1 h-3 w-3" /> Reject
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Card>
-        </div>
-      )}
-
-      <div className="space-y-2">
-        <h3 className="text-sm font-semibold text-muted-foreground">Approved Members</h3>
-        <Card>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>User</TableHead>
-                <TableHead>Roles</TableHead>
-                <TableHead>KDPA Consent & Retention</TableHead>
-                <TableHead className="w-56">Grant role</TableHead>
-                <TableHead className="w-12 text-right">Data Tools</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
-                    Loading…
-                  </TableCell>
-                </TableRow>
-              ) : (
-                users.map((u) => {
-                  const held = new Set(u.roles.map((x) => x.role));
-                  const available = ROLES.filter((rl) => !held.has(rl));
-                  return (
-                    <TableRow key={u.id}>
-                      <TableCell>
-                        <div className="font-medium flex items-center gap-1.5">
-                          {u.full_name ?? "—"}
-                          {u.is_anonymized && (
-                            <Badge variant="destructive" className="text-[10px] py-0 px-1">
-                              Anonymized
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="text-xs text-muted-foreground">{u.email}</div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {u.roles.map((rr) => (
-                            <Badge key={rr.id} variant="secondary" className="gap-1">
-                              <span className="capitalize">{rr.role.replace(/_/g, " ")}</span>
-                              {!(rr.role === "admin" && u.id === user.id) && (
-                                <button
-                                  onClick={() => removeRole.mutate(rr.id)}
-                                  className="ml-1 text-muted-foreground hover:text-destructive"
-                                >
-                                  <X className="h-3 w-3" />
-                                </button>
-                              )}
-                            </Badge>
-                          ))}
-                          {u.roles.length === 0 && (
-                            <span className="text-xs text-muted-foreground">None</span>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-xs">
-                        {u.consent_given ? (
-                          <div className="space-y-0.5">
-                            <span className="inline-flex items-center gap-1 text-emerald-700 font-medium">
-                              <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
-                              Consent v{u.consent_version || "1.0"}
-                            </span>
-                            {u.data_retention_until && (
-                              <div className="text-[10px] text-muted-foreground">
-                                Retain until:{" "}
-                                {new Date(u.data_retention_until).toLocaleDateString()}
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-amber-600 text-[11px]">Legacy / No consent</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {available.map((rl) => (
+      <Tabs defaultValue="members" className="space-y-5">
+        <TabsList className="h-auto flex-wrap">
+          <TabsTrigger value="members">Members & Roles</TabsTrigger>
+          <TabsTrigger value="registrations" className="gap-2">
+            Pending Registrations <Badge variant="secondary">{botPendingCount}</Badge>
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="members" className="space-y-8">
+          {pending.length > 0 && (
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold text-muted-foreground">
+                Pending Approval <Badge variant="secondary">{pending.length}</Badge>
+              </h3>
+              <Card>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>User</TableHead>
+                      <TableHead>Requested</TableHead>
+                      <TableHead className="w-40 text-right">Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {pending.map((p) => (
+                      <TableRow key={p.id}>
+                        <TableCell>
+                          <div className="font-medium">{p.full_name ?? "—"}</div>
+                          <div className="text-xs text-muted-foreground">{p.email}</div>
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {p.created_at ? new Date(p.created_at).toLocaleDateString() : "—"}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex justify-end gap-1">
                             <Button
-                              key={rl}
                               size="sm"
                               variant="outline"
-                              className="h-7 text-xs capitalize"
-                              onClick={() => addRole.mutate({ user_id: u.id, role: rl })}
+                              className="h-7 text-xs"
+                              disabled={approveUser.isPending}
+                              onClick={() => approveUser.mutate(p.id)}
                             >
-                              <Plus className="mr-1 h-3 w-3" /> {rl.replace(/_/g, " ")}
+                              <Check className="mr-1 h-3 w-3" /> Approve
                             </Button>
-                          ))}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <KdpaUserTools userProfile={u} />
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs text-destructive hover:text-destructive"
+                              disabled={rejectUser.isPending}
+                              onClick={() => rejectUser.mutate(p.id)}
+                            >
+                              <Ban className="mr-1 h-3 w-3" /> Reject
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </Card>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-muted-foreground">Approved Members</h3>
+            <Card>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>User</TableHead>
+                    <TableHead>Roles</TableHead>
+                    <TableHead>KDPA Consent & Retention</TableHead>
+                    <TableHead className="w-56">Grant role</TableHead>
+                    <TableHead className="w-12 text-right">Data Tools</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {isLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                        Loading…
                       </TableCell>
                     </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
-        </Card>
-      </div>
+                  ) : (
+                    users.map((u) => {
+                      const held = new Set(u.roles.map((x) => x.role));
+                      const available = ROLES.filter((rl) => !held.has(rl));
+                      return (
+                        <TableRow key={u.id}>
+                          <TableCell>
+                            <div className="font-medium flex items-center gap-1.5">
+                              {u.full_name ?? "—"}
+                              {u.is_anonymized && (
+                                <Badge variant="destructive" className="text-[10px] py-0 px-1">
+                                  Anonymized
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="text-xs text-muted-foreground">{u.email}</div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              {u.roles.map((rr) => (
+                                <Badge key={rr.id} variant="secondary" className="gap-1">
+                                  <span className="capitalize">{rr.role.replace(/_/g, " ")}</span>
+                                  {!(rr.role === "admin" && u.id === user.id) && (
+                                    <button
+                                      onClick={() => removeRole.mutate(rr.id)}
+                                      className="ml-1 text-muted-foreground hover:text-destructive"
+                                    >
+                                      <X className="h-3 w-3" />
+                                    </button>
+                                  )}
+                                </Badge>
+                              ))}
+                              {u.roles.length === 0 && (
+                                <span className="text-xs text-muted-foreground">None</span>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            {u.consent_given ? (
+                              <div className="space-y-0.5">
+                                <span className="inline-flex items-center gap-1 text-emerald-700 font-medium">
+                                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+                                  Consent v{u.consent_version || "1.0"}
+                                </span>
+                                {u.data_retention_until && (
+                                  <div className="text-[10px] text-muted-foreground">
+                                    Retain until:{" "}
+                                    {new Date(u.data_retention_until).toLocaleDateString()}
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-amber-600 text-[11px]">
+                                Legacy / No consent
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              {available.map((rl) => (
+                                <Button
+                                  key={rl}
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-xs capitalize"
+                                  onClick={() => addRole.mutate({ user_id: u.id, role: rl })}
+                                >
+                                  <Plus className="mr-1 h-3 w-3" /> {rl.replace(/_/g, " ")}
+                                </Button>
+                              ))}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <KdpaUserTools userProfile={u} />
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </Card>
+          </div>
+        </TabsContent>
+        <TabsContent value="registrations">
+          <PendingBotRegistrations />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

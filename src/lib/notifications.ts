@@ -1,31 +1,68 @@
 import { supabase } from "@/integrations/supabase/client";
 
+type EmailTemplate = "loan_status_changed" | "contribution_reviewed" | "meeting_scheduled";
+type BotEvent = "contribution_confirmed" | "loan_decided" | "meeting_scheduled";
+type DeliveryResult = { success: boolean; sent?: number; failed?: number; error?: string };
+
+function isDeliveryResult(value: unknown): value is DeliveryResult {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "success" in value &&
+    typeof value.success === "boolean"
+  );
+}
+
+// The browser never receives an Africa's Talking API key or supplies arbitrary
+// phone numbers/message bodies. The authenticated Edge Function checks officer
+// roles, fetches the record + member's prefers_sms/opt-in, and sends via AT.
+export async function sendWhatsAppSMS({
+  event,
+  recordId,
+}: {
+  event: BotEvent;
+  recordId: string;
+}): Promise<DeliveryResult> {
+  try {
+    const { data, error } = await supabase.functions.invoke("bot-notifications", {
+      body: { event, recordId },
+    });
+    if (error) {
+      if ("context" in error && error.context instanceof Response) {
+        const details: unknown = await error.context.json();
+        if (isDeliveryResult(details) && details.error) throw new Error(details.error);
+      }
+      throw error;
+    }
+    const response: unknown = data;
+    if (!isDeliveryResult(response) || !response.success)
+      throw new Error("Notification delivery failed");
+    if (response.failed)
+      throw new Error(`${response.failed} member notifications could not be delivered`);
+    return response;
+  } catch (error) {
+    console.error("[Notification Service] WhatsApp/SMS delivery failed", error);
+    throw error;
+  }
+}
+
 export async function sendNotificationEmail(params: {
   to: string | string[];
   subject: string;
-  template: "loan_status_changed" | "contribution_reviewed" | "meeting_scheduled";
+  template: EmailTemplate;
   data: Record<string, unknown>;
-}) {
+}): Promise<void> {
   try {
-    const { data, error } = await supabase.functions.invoke("send-email", {
-      body: params,
-    });
-    if (error) {
-      console.warn(
-        "[Notification Service] Edge function error (falling back to mock):",
-        error.message,
-      );
-      return { success: false, error: error.message };
-    }
-    return data;
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Unknown error";
-    console.warn("[Notification Service] Error sending email notification:", msg);
-    return { success: false, error: msg };
+    const { error } = await supabase.functions.invoke("send-email", { body: params });
+    if (error) throw error;
+  } catch (error) {
+    console.error("[Notification Service] Email delivery failed", error);
+    throw error;
   }
 }
 
 export async function notifyLoanStatusChange({
+  loanId,
   memberEmail,
   memberName,
   loanAmount,
@@ -34,31 +71,34 @@ export async function notifyLoanStatusChange({
   reason,
   repaymentMonths,
 }: {
-  memberEmail: string;
+  loanId?: string;
+  memberEmail?: string | null;
   memberName?: string;
   loanAmount: number;
   loanType: string;
   status: string;
   reason?: string;
   repaymentMonths?: number;
-}) {
-  if (!memberEmail) return;
-  return sendNotificationEmail({
-    to: memberEmail,
-    subject: `Murage Foundation — Loan Application ${status.toUpperCase()}`,
-    template: "loan_status_changed",
-    data: {
-      memberName,
-      loanAmount,
-      loanType,
-      status,
-      reason,
-      repaymentMonths,
-    },
-  });
+}): Promise<void> {
+  const deliveries: Promise<unknown>[] = [];
+  if (memberEmail) {
+    deliveries.push(
+      sendNotificationEmail({
+        to: memberEmail,
+        subject: `Murage Foundation — Loan Application ${status.toUpperCase()}`,
+        template: "loan_status_changed",
+        data: { memberName, loanAmount, loanType, status, reason, repaymentMonths },
+      }),
+    );
+  }
+  if (loanId && (status === "approved" || status === "rejected")) {
+    deliveries.push(sendWhatsAppSMS({ event: "loan_decided", recordId: loanId }));
+  }
+  await Promise.all(deliveries);
 }
 
 export async function notifyContributionReview({
+  contributionId,
   memberEmail,
   memberName,
   amount,
@@ -67,63 +107,69 @@ export async function notifyContributionReview({
   reference,
   notes,
 }: {
-  memberEmail: string;
+  contributionId: string;
+  memberEmail?: string | null;
   memberName?: string;
   amount: number;
-  status: string;
+  status: "confirmed" | "rejected";
   method?: string;
   reference?: string;
   notes?: string;
-}) {
-  if (!memberEmail) return;
-  return sendNotificationEmail({
-    to: memberEmail,
-    subject: `Murage Foundation — Contribution ${status === "confirmed" ? "Confirmed" : "Update"}`,
-    template: "contribution_reviewed",
-    data: {
-      memberName,
-      amount,
-      status,
-      method,
-      reference,
-      notes,
-    },
-  });
+}): Promise<void> {
+  const deliveries: Promise<unknown>[] = [];
+  if (memberEmail) {
+    deliveries.push(
+      sendNotificationEmail({
+        to: memberEmail,
+        subject: `Murage Foundation — Contribution ${status === "confirmed" ? "Confirmed" : "Update"}`,
+        template: "contribution_reviewed",
+        data: { memberName, amount, status, method, reference, notes },
+      }),
+    );
+  }
+  if (status === "confirmed") {
+    deliveries.push(sendWhatsAppSMS({ event: "contribution_confirmed", recordId: contributionId }));
+  }
+  await Promise.all(deliveries);
 }
 
 export async function notifyNewMeeting({
+  meetingId,
   title,
   scheduledFor,
   location,
   agenda,
 }: {
+  meetingId: string;
   title: string;
   scheduledFor: string;
   location?: string;
   agenda?: string;
-}) {
+}): Promise<void> {
   try {
-    // Fetch all active approved members to receive meeting notification
-    const { data: members } = await supabase
+    const { data: members, error } = await supabase
       .from("profiles")
       .select("email")
-      .eq("status", "approved");
-
-    const emails = (members || []).map((m) => m.email).filter(Boolean) as string[];
-    if (emails.length === 0) return;
-
-    return sendNotificationEmail({
-      to: emails,
-      subject: `Notice of Foundation Meeting: ${title}`,
-      template: "meeting_scheduled",
-      data: {
-        title,
-        scheduledFor,
-        location,
-        agenda,
-      },
-    });
-  } catch (err) {
-    console.warn("[Notification Service] Failed to broadcast meeting notification:", err);
+      .eq("status", "approved")
+      .eq("is_anonymized", false);
+    if (error) throw error;
+    const emails = (members ?? []).flatMap((member) => (member.email ? [member.email] : []));
+    const phoneDelivery = sendWhatsAppSMS({ event: "meeting_scheduled", recordId: meetingId });
+    await Promise.all([
+      phoneDelivery,
+      ...(emails.length
+        ? [
+            sendNotificationEmail({
+              to: emails,
+              subject: `Notice of Foundation Meeting: ${title}`,
+              template: "meeting_scheduled",
+              data: { title, scheduledFor, location, agenda },
+            }),
+          ]
+        : []),
+    ]);
+  } catch (error) {
+    console.error("[Notification Service] Meeting broadcast failed", error);
+    throw error;
   }
 }

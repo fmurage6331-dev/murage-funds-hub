@@ -46,21 +46,28 @@ function Page() {
   const create = useMutation({
     mutationFn: async () => {
       const scheduledIso = new Date(form.scheduled_for).toISOString();
-      const { error } = await supabase.from("meetings").insert({
-        title: form.title,
-        scheduled_for: scheduledIso,
-        location: form.location || null,
-        agenda: form.agenda || null,
-        created_by: user.id,
-      });
+      const { data: meeting, error } = await supabase
+        .from("meetings")
+        .insert({
+          title: form.title,
+          scheduled_for: scheduledIso,
+          location: form.location || null,
+          agenda: form.agenda || null,
+          created_by: user.id,
+        })
+        .select("id")
+        .single();
       if (error) throw error;
 
-      notifyNewMeeting({
+      void notifyNewMeeting({
+        meetingId: meeting.id,
         title: form.title,
         scheduledFor: scheduledIso,
         location: form.location || undefined,
         agenda: form.agenda || undefined,
-      }).catch((e) => console.warn("Failed broadcasting meeting notification", e));
+      }).catch((notificationError: unknown) =>
+        console.error("Failed broadcasting meeting notification", notificationError),
+      );
     },
     onSuccess: () => {
       toast.success("Meeting scheduled. All members can see it.");
@@ -166,11 +173,7 @@ function Page() {
         <Card className="p-8 text-center text-muted-foreground">No meetings scheduled.</Card>
       ) : (
         meetings.map((m) => {
-          const minutes = ((m as any).meeting_minutes ?? []) as {
-            id: string;
-            content: string;
-            created_at: string;
-          }[];
+          const minutes = m.meeting_minutes ?? [];
           const upcoming = new Date(m.scheduled_for) > new Date();
           return (
             <Card key={m.id} className="p-5">

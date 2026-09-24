@@ -53,6 +53,12 @@ export type Database = {
         }
         Relationships: []
       }
+      bot_notification_events: {
+        Row: { created_at: string; event_key: string }
+        Insert: { created_at?: string; event_key: string }
+        Update: { created_at?: string; event_key?: string }
+        Relationships: []
+      }
       contributions: {
         Row: {
           amount: number
@@ -64,7 +70,11 @@ export type Database = {
           id: string
           member_id: string
           method: string
+          mpesa_sender_name: string | null
+          mpesa_sender_phone: string | null
+          mpesa_transaction_id: string | null
           notes: string | null
+          paybill_number: string | null
           reference: string | null
           status: string
           updated_at: string
@@ -79,7 +89,11 @@ export type Database = {
           id?: string
           member_id: string
           method?: string
+          mpesa_sender_name?: string | null
+          mpesa_sender_phone?: string | null
+          mpesa_transaction_id?: string | null
           notes?: string | null
+          paybill_number?: string | null
           reference?: string | null
           status?: string
           updated_at?: string
@@ -94,7 +108,11 @@ export type Database = {
           id?: string
           member_id?: string
           method?: string
+          mpesa_sender_name?: string | null
+          mpesa_sender_phone?: string | null
+          mpesa_transaction_id?: string | null
           notes?: string | null
+          paybill_number?: string | null
           reference?: string | null
           status?: string
           updated_at?: string
@@ -425,6 +443,54 @@ export type Database = {
         }
         Relationships: []
       }
+      pending_registrations: {
+        Row: {
+          admin_notes: string | null
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          email: string | null
+          full_name: string
+          id: string
+          invite_sent: boolean
+          invite_sent_at: string | null
+          phone_number: string
+          registration_channel: string
+          requested_role: string
+          status: string
+        }
+        Insert: {
+          admin_notes?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          email?: string | null
+          full_name: string
+          id?: string
+          invite_sent?: boolean
+          invite_sent_at?: string | null
+          phone_number: string
+          registration_channel: string
+          requested_role: string
+          status?: string
+        }
+        Update: {
+          admin_notes?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          email?: string | null
+          full_name?: string
+          id?: string
+          invite_sent?: boolean
+          invite_sent_at?: string | null
+          phone_number?: string
+          registration_channel?: string
+          requested_role?: string
+          status?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           anonymized_at: string | null
@@ -436,6 +502,12 @@ export type Database = {
           email: string | null
           full_name: string | null
           id: string
+          phone_number: string | null
+          phone_only_member: boolean
+          prefers_sms: boolean
+          whatsapp_opt_in: boolean
+          whatsapp_opt_in_at: string | null
+          whatsapp_verified: boolean
           is_anonymized: boolean
           status: string
           updated_at: string
@@ -450,6 +522,12 @@ export type Database = {
           email?: string | null
           full_name?: string | null
           id: string
+          phone_number?: string | null
+          phone_only_member?: boolean
+          prefers_sms?: boolean
+          whatsapp_opt_in?: boolean
+          whatsapp_opt_in_at?: string | null
+          whatsapp_verified?: boolean
           is_anonymized?: boolean
           status?: string
           updated_at?: string
@@ -464,6 +542,12 @@ export type Database = {
           email?: string | null
           full_name?: string | null
           id?: string
+          phone_number?: string | null
+          phone_only_member?: boolean
+          prefers_sms?: boolean
+          whatsapp_opt_in?: boolean
+          whatsapp_opt_in_at?: string | null
+          whatsapp_verified?: boolean
           is_anonymized?: boolean
           status?: string
           updated_at?: string
@@ -523,6 +607,36 @@ export type Database = {
           },
         ]
       }
+      whatsapp_sessions: {
+        Row: {
+          channel: string
+          collected_data: Json
+          expires_at: string
+          id: string
+          last_message_at: string
+          phone_number: string
+          step: string
+        }
+        Insert: {
+          channel: string
+          collected_data?: Json
+          expires_at?: string
+          id?: string
+          last_message_at?: string
+          phone_number: string
+          step?: string
+        }
+        Update: {
+          channel?: string
+          collected_data?: Json
+          expires_at?: string
+          id?: string
+          last_message_at?: string
+          phone_number?: string
+          step?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -542,7 +656,15 @@ export type Database = {
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "user_roles_user_id_profiles_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
@@ -570,6 +692,15 @@ export type Database = {
       }
     }
     Functions: {
+      approve_bot_registration: {
+        Args: { _registration_id: string; _approved_by: string; _auth_user_id?: string | null }
+        Returns: string
+      }
+      bot_confirmed_total: { Args: { _member_id: string }; Returns: number }
+      reject_bot_registration: {
+        Args: { _registration_id: string; _admin_id: string; _reason: string }
+        Returns: undefined
+      }
       board_majority_count: { Args: never; Returns: number }
       has_any_role: {
         Args: {

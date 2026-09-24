@@ -6,11 +6,33 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Card } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { PaymentInfoCard } from "@/components/PaymentInfoCard";
+import { payment } from "@/lib/foundation";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -18,7 +40,12 @@ export const Route = createFileRoute("/_authenticated/my-contributions")({
   component: MyContributionsPage,
 });
 
-const fmt = (n: number) => new Intl.NumberFormat("en-KE", { style: "currency", currency: "KES", maximumFractionDigits: 0 }).format(n);
+const fmt = (n: number) =>
+  new Intl.NumberFormat("en-KE", {
+    style: "currency",
+    currency: "KES",
+    maximumFractionDigits: 0,
+  }).format(n);
 
 function MyContributionsPage() {
   const qc = useQueryClient();
@@ -26,7 +53,20 @@ function MyContributionsPage() {
 
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["my-contribs", user.id],
-    queryFn: async () => (await supabase.from("contributions").select("*").eq("member_id", user.id).order("contributed_on", { ascending: false })).data ?? [],
+    queryFn: async () => {
+      try {
+        const { data, error } = await supabase
+          .from("contributions")
+          .select("*")
+          .eq("member_id", user.id)
+          .order("contributed_on", { ascending: false });
+        if (error) throw error;
+        return data ?? [];
+      } catch (error) {
+        console.error("[my-contributions] member contributions query failed", error);
+        throw error;
+      }
+    },
   });
 
   const totals = rows.reduce(
@@ -50,12 +90,18 @@ function MyContributionsPage() {
 
   const create = useMutation({
     mutationFn: async () => {
+      const reference = form.reference.trim().toUpperCase();
+      if (form.method === "mpesa" && !/^[A-Z0-9-]{5,30}$/.test(reference)) {
+        throw new Error("Enter the M-Pesa confirmation reference (5–30 letters or numbers).");
+      }
       const { error } = await supabase.from("contributions").insert({
         member_id: user.id,
         amount: Number(form.amount),
         contributed_on: form.contributed_on,
         method: form.method,
-        reference: form.reference || null,
+        reference: reference || null,
+        mpesa_transaction_id: form.method === "mpesa" ? reference : null,
+        paybill_number: form.method === "mpesa" ? payment.paybill : null,
         notes: form.notes || null,
       });
       if (error) throw error;
@@ -74,7 +120,10 @@ function MyContributionsPage() {
       const { error } = await supabase.from("contributions").delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => { toast.success("Removed"); qc.invalidateQueries({ queryKey: ["my-contribs"] }); },
+    onSuccess: () => {
+      toast.success("Removed");
+      qc.invalidateQueries({ queryKey: ["my-contribs"] });
+    },
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -83,29 +132,55 @@ function MyContributionsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="font-serif text-2xl font-semibold text-primary">My Contributions</h2>
-          <p className="text-sm text-muted-foreground">Record what you've contributed. The treasurer confirms each entry.</p>
+          <p className="text-sm text-muted-foreground">
+            Record what you've contributed. The treasurer confirms each entry.
+          </p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button><Plus className="mr-2 h-4 w-4" /> New contribution</Button>
+            <Button>
+              <Plus className="mr-2 h-4 w-4" /> New contribution
+            </Button>
           </DialogTrigger>
           <DialogContent>
-            <DialogHeader><DialogTitle className="font-serif">Record contribution</DialogTitle></DialogHeader>
-            <form onSubmit={(e) => { e.preventDefault(); create.mutate(); }} className="space-y-3">
+            <DialogHeader>
+              <DialogTitle className="font-serif">Record contribution</DialogTitle>
+            </DialogHeader>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                create.mutate();
+              }}
+              className="space-y-3"
+            >
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label>Amount (KES)</Label>
-                  <Input type="number" min="1" step="0.01" required value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
+                  <Input
+                    type="number"
+                    min="1"
+                    step="0.01"
+                    required
+                    value={form.amount}
+                    onChange={(e) => setForm({ ...form, amount: e.target.value })}
+                  />
                 </div>
                 <div>
                   <Label>Date</Label>
-                  <Input type="date" required value={form.contributed_on} onChange={(e) => setForm({ ...form, contributed_on: e.target.value })} />
+                  <Input
+                    type="date"
+                    required
+                    value={form.contributed_on}
+                    onChange={(e) => setForm({ ...form, contributed_on: e.target.value })}
+                  />
                 </div>
               </div>
               <div>
                 <Label>Method</Label>
                 <Select value={form.method} onValueChange={(v) => setForm({ ...form, method: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="mpesa">M-Pesa</SelectItem>
                     <SelectItem value="bank">Bank transfer</SelectItem>
@@ -116,27 +191,44 @@ function MyContributionsPage() {
               </div>
               <div>
                 <Label>Reference / transaction code</Label>
-                <Input value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} placeholder="e.g. QJ7X1A2B3C" />
+                <Input
+                  required={form.method === "mpesa"}
+                  value={form.reference}
+                  onChange={(e) => setForm({ ...form, reference: e.target.value })}
+                  placeholder="e.g. QJ7X1A2B3C"
+                />
               </div>
               <div>
                 <Label>Notes</Label>
-                <Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+                <Textarea
+                  rows={2}
+                  value={form.notes}
+                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                />
               </div>
               <DialogFooter>
-                <Button type="submit" disabled={create.isPending}>{create.isPending ? "Saving…" : "Submit"}</Button>
+                <Button type="submit" disabled={create.isPending}>
+                  {create.isPending ? "Saving…" : "Submit"}
+                </Button>
               </DialogFooter>
             </form>
           </DialogContent>
         </Dialog>
       </div>
 
+      <PaymentInfoCard />
+
       <div className="grid gap-3 sm:grid-cols-2">
         <Card className="p-4">
-          <div className="text-xs uppercase tracking-wider text-muted-foreground">Confirmed total</div>
+          <div className="text-xs uppercase tracking-wider text-muted-foreground">
+            Confirmed total
+          </div>
           <div className="mt-1 font-serif text-2xl text-success">{fmt(totals.confirmed)}</div>
         </Card>
         <Card className="p-4">
-          <div className="text-xs uppercase tracking-wider text-muted-foreground">Pending confirmation</div>
+          <div className="text-xs uppercase tracking-wider text-muted-foreground">
+            Pending confirmation
+          </div>
           <div className="mt-1 font-serif text-2xl text-gold">{fmt(totals.pending)}</div>
         </Card>
       </div>
@@ -155,31 +247,53 @@ function MyContributionsPage() {
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">Loading…</TableCell></TableRow>
-            ) : rows.length === 0 ? (
-              <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">No contributions yet.</TableCell></TableRow>
-            ) : rows.map((r) => (
-              <TableRow key={r.id}>
-                <TableCell>{new Date(r.contributed_on).toLocaleDateString()}</TableCell>
-                <TableCell className="capitalize">{r.method}</TableCell>
-                <TableCell className="text-muted-foreground">{r.reference ?? "—"}</TableCell>
-                <TableCell>
-                  <Badge className={
-                    r.status === "confirmed" ? "bg-success text-success-foreground" :
-                    r.status === "rejected" ? "bg-destructive/10 text-destructive" :
-                    "bg-gold/20 text-gold"
-                  }>{r.status}</Badge>
-                </TableCell>
-                <TableCell className="text-right font-medium">{fmt(Number(r.amount))}</TableCell>
-                <TableCell>
-                  {r.status === "pending" && (
-                    <Button variant="ghost" size="icon" onClick={() => { if (confirm("Remove this entry?")) del.mutate(r.id); }}>
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  )}
+              <TableRow>
+                <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                  Loading…
                 </TableCell>
               </TableRow>
-            ))}
+            ) : rows.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                  No contributions yet.
+                </TableCell>
+              </TableRow>
+            ) : (
+              rows.map((r) => (
+                <TableRow key={r.id}>
+                  <TableCell>{new Date(r.contributed_on).toLocaleDateString()}</TableCell>
+                  <TableCell className="capitalize">{r.method}</TableCell>
+                  <TableCell className="text-muted-foreground">{r.reference ?? "—"}</TableCell>
+                  <TableCell>
+                    <Badge
+                      className={
+                        r.status === "confirmed"
+                          ? "bg-success text-success-foreground"
+                          : r.status === "rejected"
+                            ? "bg-destructive/10 text-destructive"
+                            : "bg-gold/20 text-gold"
+                      }
+                    >
+                      {r.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right font-medium">{fmt(Number(r.amount))}</TableCell>
+                  <TableCell>
+                    {r.status === "pending" && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          if (confirm("Remove this entry?")) del.mutate(r.id);
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       </Card>

@@ -3,15 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import {
-  ArrowDownRight,
-  ArrowUpRight,
-  Users,
-  Wallet,
-  AlertTriangle,
-  ShieldAlert,
-  ArrowRight,
-} from "lucide-react";
+import { PaymentInfoCard } from "@/components/PaymentInfoCard";
+import { ArrowDownRight, ArrowUpRight, Users, Wallet, ShieldAlert, ArrowRight } from "lucide-react";
 import {
   BarChart,
   Bar,
@@ -139,6 +132,7 @@ function Dashboard() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
+      <PaymentInfoCard />
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {stats.map((s) => (
           <Card key={s.label}>
