@@ -48,16 +48,16 @@ function PendingApprovalPage() {
             <>
               <h2 className="text-lg font-semibold">Access not granted</h2>
               <p className="text-sm text-muted-foreground">
-                An admin has reviewed your signup and did not approve access. If you believe
-                this is a mistake, please contact the foundation directly.
+                An admin has reviewed your signup and did not approve access. If you believe this is
+                a mistake, please contact the foundation directly.
               </p>
             </>
           ) : (
             <>
               <h2 className="text-lg font-semibold">Awaiting approval</h2>
               <p className="text-sm text-muted-foreground">
-                Your account has been created and is waiting for an admin to approve access.
-                You'll be able to sign in normally once approved.
+                Your account has been created and is waiting for an admin to approve access. You'll
+                be able to sign in normally once approved.
               </p>
             </>
           )}

@@ -14,9 +14,7 @@ function Landing() {
             <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary text-primary-foreground">
               <Leaf className="h-5 w-5" />
             </div>
-            <div className="font-serif text-lg font-semibold tracking-tight">
-              Murage Foundation
-            </div>
+            <div className="font-serif text-lg font-semibold tracking-tight">Murage Foundation</div>
           </div>
           <Link
             to="/auth"
@@ -37,8 +35,8 @@ function Landing() {
             Stewarding every shilling with clarity and care.
           </h1>
           <p className="mt-6 max-w-2xl text-lg text-muted-foreground">
-            A private records system for the Murage Foundation team to track donors, income
-            and expenses — with dashboards and reports that keep the mission accountable.
+            A private records system for the Murage Foundation team to track donors, income and
+            expenses — with dashboards and reports that keep the mission accountable.
           </p>
           <div className="mt-8 flex gap-3">
             <Link
@@ -52,9 +50,21 @@ function Landing() {
 
         <div className="mt-24 grid gap-6 md:grid-cols-3">
           {[
-            { icon: TrendingUp, title: "Income & expenses", body: "Log every transaction with category, date and receipt reference." },
-            { icon: Leaf, title: "Donor registry", body: "Keep a living record of donors and their contribution history." },
-            { icon: ShieldCheck, title: "Role-based access", body: "Only admins can edit records. Members can view and audit." },
+            {
+              icon: TrendingUp,
+              title: "Income & expenses",
+              body: "Log every transaction with category, date and receipt reference.",
+            },
+            {
+              icon: Leaf,
+              title: "Donor registry",
+              body: "Keep a living record of donors and their contribution history.",
+            },
+            {
+              icon: ShieldCheck,
+              title: "Role-based access",
+              body: "Only admins can edit records. Members can view and audit.",
+            },
           ].map(({ icon: Icon, title, body }) => (
             <div key={title} className="rounded-lg border border-border bg-card p-6">
               <div className="flex h-10 w-10 items-center justify-center rounded-md bg-accent text-primary">

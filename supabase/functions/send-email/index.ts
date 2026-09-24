@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // Supabase Edge Function: send-email
 // Triggered on:
 // 1. Loan status changes (submitted -> forwarded -> approved / rejected)
@@ -38,7 +39,8 @@ function generateHtmlEmail(template: string, data: Record<string, any>): string 
   switch (template) {
     case "loan_status_changed": {
       const { memberName, loanAmount, loanType, status, reason, repaymentMonths } = data;
-      const statusBadgeColor = status === "approved" ? "#16a34a" : status === "rejected" ? "#dc2626" : "#c59a3f";
+      const statusBadgeColor =
+        status === "approved" ? "#16a34a" : status === "rejected" ? "#dc2626" : "#c59a3f";
 
       contentHtml = `
         <h2 style="color: ${brandColor}; margin-top: 0;">Loan Application Update</h2>
@@ -140,7 +142,7 @@ serve(async (req) => {
     if (!to || !subject || !template) {
       return new Response(
         JSON.stringify({ error: "Missing required fields: to, subject, template" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
@@ -154,7 +156,7 @@ serve(async (req) => {
       const res = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${resendApiKey}`,
+          Authorization: `Bearer ${resendApiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -176,13 +178,13 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({ success: true, message: "Notification processed", result: providerResult }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error: any) {
     console.error("[send-email error]", error);
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });

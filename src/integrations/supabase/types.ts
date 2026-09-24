@@ -1,592 +1,709 @@
-export type Json =
-  | string
-  | number
-  | boolean
-  | null
-  | { [key: string]: Json | undefined }
-  | Json[]
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
 export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
-  }
+    PostgrestVersion: "14.5";
+  };
+  graphql_public: {
+    Tables: {
+      [_ in never]: never;
+    };
+    Views: {
+      [_ in never]: never;
+    };
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json;
+          operationName?: string;
+          query?: string;
+          variables?: Json;
+        };
+        Returns: Json;
+      };
+    };
+    Enums: {
+      [_ in never]: never;
+    };
+    CompositeTypes: {
+      [_ in never]: never;
+    };
+  };
   public: {
     Tables: {
       audit_logs: {
         Row: {
-          action: string
-          changed_fields: string[] | null
-          created_at: string
-          id: string
-          new_values: Json | null
-          old_values: Json | null
-          performed_by: string | null
-          performed_by_email: string | null
-          record_id: string | null
-          table_name: string
-        }
+          action: string;
+          changed_fields: string[] | null;
+          created_at: string;
+          id: string;
+          new_values: Json | null;
+          old_values: Json | null;
+          performed_by: string | null;
+          performed_by_email: string | null;
+          record_id: string;
+          table_name: string;
+        };
         Insert: {
-          action: string
-          changed_fields?: string[] | null
-          created_at?: string
-          id?: string
-          new_values?: Json | null
-          old_values?: Json | null
-          performed_by?: string | null
-          performed_by_email?: string | null
-          record_id?: string | null
-          table_name: string
-        }
+          action: string;
+          changed_fields?: string[] | null;
+          created_at?: string;
+          id?: string;
+          new_values?: Json | null;
+          old_values?: Json | null;
+          performed_by?: string | null;
+          performed_by_email?: string | null;
+          record_id: string;
+          table_name: string;
+        };
         Update: {
-          action?: string
-          changed_fields?: string[] | null
-          created_at?: string
-          id?: string
-          new_values?: Json | null
-          old_values?: Json | null
-          performed_by?: string | null
-          performed_by_email?: string | null
-          record_id?: string | null
-          table_name?: string
-        }
-        Relationships: []
-      }
+          action?: string;
+          changed_fields?: string[] | null;
+          created_at?: string;
+          id?: string;
+          new_values?: Json | null;
+          old_values?: Json | null;
+          performed_by?: string | null;
+          performed_by_email?: string | null;
+          record_id?: string;
+          table_name?: string;
+        };
+        Relationships: [];
+      };
       contributions: {
         Row: {
-          amount: number
-          confirmed_at: string | null
-          confirmed_by: string | null
-          contributed_on: string
-          created_at: string
-          currency: string
-          id: string
-          member_id: string
-          method: string
-          notes: string | null
-          reference: string | null
-          status: string
-          updated_at: string
-        }
+          amount: number;
+          confirmed_at: string | null;
+          confirmed_by: string | null;
+          contributed_on: string;
+          created_at: string;
+          currency: string;
+          id: string;
+          member_id: string;
+          method: string;
+          mpesa_sender_name: string | null;
+          mpesa_sender_phone: string | null;
+          mpesa_transaction_id: string | null;
+          notes: string | null;
+          paybill_number: string | null;
+          reference: string | null;
+          status: string;
+          updated_at: string;
+        };
         Insert: {
-          amount: number
-          confirmed_at?: string | null
-          confirmed_by?: string | null
-          contributed_on?: string
-          created_at?: string
-          currency?: string
-          id?: string
-          member_id: string
-          method?: string
-          notes?: string | null
-          reference?: string | null
-          status?: string
-          updated_at?: string
-        }
+          amount: number;
+          confirmed_at?: string | null;
+          confirmed_by?: string | null;
+          contributed_on?: string;
+          created_at?: string;
+          currency?: string;
+          id?: string;
+          member_id: string;
+          method?: string;
+          mpesa_sender_name?: string | null;
+          mpesa_sender_phone?: string | null;
+          mpesa_transaction_id?: string | null;
+          notes?: string | null;
+          paybill_number?: string | null;
+          reference?: string | null;
+          status?: string;
+          updated_at?: string;
+        };
         Update: {
-          amount?: number
-          confirmed_at?: string | null
-          confirmed_by?: string | null
-          contributed_on?: string
-          created_at?: string
-          currency?: string
-          id?: string
-          member_id?: string
-          method?: string
-          notes?: string | null
-          reference?: string | null
-          status?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "contributions_member_id_profiles_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
+          amount?: number;
+          confirmed_at?: string | null;
+          confirmed_by?: string | null;
+          contributed_on?: string;
+          created_at?: string;
+          currency?: string;
+          id?: string;
+          member_id?: string;
+          method?: string;
+          mpesa_sender_name?: string | null;
+          mpesa_sender_phone?: string | null;
+          mpesa_transaction_id?: string | null;
+          notes?: string | null;
+          paybill_number?: string | null;
+          reference?: string | null;
+          status?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       donors: {
         Row: {
-          address: string | null
-          created_at: string
-          created_by: string | null
-          email: string | null
-          id: string
-          name: string
-          notes: string | null
-          phone: string | null
-          updated_at: string
-        }
+          address: string | null;
+          created_at: string;
+          created_by: string | null;
+          email: string | null;
+          id: string;
+          name: string;
+          notes: string | null;
+          phone: string | null;
+          updated_at: string;
+        };
         Insert: {
-          address?: string | null
-          created_at?: string
-          created_by?: string | null
-          email?: string | null
-          id?: string
-          name: string
-          notes?: string | null
-          phone?: string | null
-          updated_at?: string
-        }
+          address?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          email?: string | null;
+          id?: string;
+          name: string;
+          notes?: string | null;
+          phone?: string | null;
+          updated_at?: string;
+        };
         Update: {
-          address?: string | null
-          created_at?: string
-          created_by?: string | null
-          email?: string | null
-          id?: string
-          name?: string
-          notes?: string | null
-          phone?: string | null
-          updated_at?: string
-        }
-        Relationships: []
-      }
+          address?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          email?: string | null;
+          id?: string;
+          name?: string;
+          notes?: string | null;
+          phone?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       loan_repayments: {
         Row: {
-          amount_due: number
-          amount_paid: number
-          created_at: string
-          due_date: string
-          id: string
-          installment_number: number
-          loan_id: string
-          notes: string | null
-          paid_at: string | null
-          payment_method: string | null
-          recorded_by: string | null
-          reference: string | null
-          status: string
-          updated_at: string
-        }
+          amount_due: number;
+          amount_paid: number;
+          created_at: string;
+          due_date: string;
+          id: string;
+          installment_number: number;
+          loan_id: string;
+          notes: string | null;
+          paid_at: string | null;
+          payment_method: string | null;
+          recorded_by: string | null;
+          reference: string | null;
+          status: string;
+          updated_at: string;
+        };
         Insert: {
-          amount_due: number
-          amount_paid?: number
-          created_at?: string
-          due_date: string
-          id?: string
-          installment_number: number
-          loan_id: string
-          notes?: string | null
-          paid_at?: string | null
-          payment_method?: string | null
-          recorded_by?: string | null
-          reference?: string | null
-          status?: string
-          updated_at?: string
-        }
+          amount_due: number;
+          amount_paid?: number;
+          created_at?: string;
+          due_date: string;
+          id?: string;
+          installment_number: number;
+          loan_id: string;
+          notes?: string | null;
+          paid_at?: string | null;
+          payment_method?: string | null;
+          recorded_by?: string | null;
+          reference?: string | null;
+          status?: string;
+          updated_at?: string;
+        };
         Update: {
-          amount_due?: number
-          amount_paid?: number
-          created_at?: string
-          due_date?: string
-          id?: string
-          installment_number?: number
-          loan_id?: string
-          notes?: string | null
-          paid_at?: string | null
-          payment_method?: string | null
-          recorded_by?: string | null
-          reference?: string | null
-          status?: string
-          updated_at?: string
-        }
+          amount_due?: number;
+          amount_paid?: number;
+          created_at?: string;
+          due_date?: string;
+          id?: string;
+          installment_number?: number;
+          loan_id?: string;
+          notes?: string | null;
+          paid_at?: string | null;
+          payment_method?: string | null;
+          recorded_by?: string | null;
+          reference?: string | null;
+          status?: string;
+          updated_at?: string;
+        };
         Relationships: [
           {
-            foreignKeyName: "loan_repayments_loan_id_fkey"
-            columns: ["loan_id"]
-            isOneToOne: false
-            referencedRelation: "loan_risk_flags"
-            referencedColumns: ["loan_id"]
+            foreignKeyName: "loan_repayments_loan_id_fkey";
+            columns: ["loan_id"];
+            isOneToOne: false;
+            referencedRelation: "loan_risk_flags";
+            referencedColumns: ["loan_id"];
           },
           {
-            foreignKeyName: "loan_repayments_loan_id_fkey"
-            columns: ["loan_id"]
-            isOneToOne: false
-            referencedRelation: "loans"
-            referencedColumns: ["id"]
+            foreignKeyName: "loan_repayments_loan_id_fkey";
+            columns: ["loan_id"];
+            isOneToOne: false;
+            referencedRelation: "loans";
+            referencedColumns: ["id"];
           },
-        ]
-      }
+        ];
+      };
       loan_rules: {
         Row: {
-          active: boolean
-          created_at: string
-          id: string
-          interest_rate_percent: number
-          loan_type: Database["public"]["Enums"]["loan_type"]
-          max_amount: number
-          max_multiplier: number
-          max_repayment_months: number
-          min_membership_days: number
-          updated_at: string
-          updated_by: string | null
-        }
+          active: boolean;
+          created_at: string;
+          id: string;
+          interest_rate_percent: number;
+          loan_type: Database["public"]["Enums"]["loan_type"];
+          max_amount: number;
+          max_multiplier: number;
+          max_repayment_months: number;
+          min_membership_days: number;
+          updated_at: string;
+          updated_by: string | null;
+        };
         Insert: {
-          active?: boolean
-          created_at?: string
-          id?: string
-          interest_rate_percent?: number
-          loan_type: Database["public"]["Enums"]["loan_type"]
-          max_amount?: number
-          max_multiplier?: number
-          max_repayment_months?: number
-          min_membership_days?: number
-          updated_at?: string
-          updated_by?: string | null
-        }
+          active?: boolean;
+          created_at?: string;
+          id?: string;
+          interest_rate_percent?: number;
+          loan_type: Database["public"]["Enums"]["loan_type"];
+          max_amount?: number;
+          max_multiplier?: number;
+          max_repayment_months?: number;
+          min_membership_days?: number;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
         Update: {
-          active?: boolean
-          created_at?: string
-          id?: string
-          interest_rate_percent?: number
-          loan_type?: Database["public"]["Enums"]["loan_type"]
-          max_amount?: number
-          max_multiplier?: number
-          max_repayment_months?: number
-          min_membership_days?: number
-          updated_at?: string
-          updated_by?: string | null
-        }
-        Relationships: []
-      }
+          active?: boolean;
+          created_at?: string;
+          id?: string;
+          interest_rate_percent?: number;
+          loan_type?: Database["public"]["Enums"]["loan_type"];
+          max_amount?: number;
+          max_multiplier?: number;
+          max_repayment_months?: number;
+          min_membership_days?: number;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [];
+      };
       loan_votes: {
         Row: {
-          board_member_id: string
-          comment: string | null
-          created_at: string
-          id: string
-          loan_id: string
-          vote: string
-        }
+          board_member_id: string;
+          comment: string | null;
+          created_at: string;
+          id: string;
+          loan_id: string;
+          vote: string;
+        };
         Insert: {
-          board_member_id: string
-          comment?: string | null
-          created_at?: string
-          id?: string
-          loan_id: string
-          vote: string
-        }
+          board_member_id: string;
+          comment?: string | null;
+          created_at?: string;
+          id?: string;
+          loan_id: string;
+          vote: string;
+        };
         Update: {
-          board_member_id?: string
-          comment?: string | null
-          created_at?: string
-          id?: string
-          loan_id?: string
-          vote?: string
-        }
+          board_member_id?: string;
+          comment?: string | null;
+          created_at?: string;
+          id?: string;
+          loan_id?: string;
+          vote?: string;
+        };
         Relationships: [
           {
-            foreignKeyName: "loan_votes_loan_id_fkey"
-            columns: ["loan_id"]
-            isOneToOne: false
-            referencedRelation: "loan_risk_flags"
-            referencedColumns: ["loan_id"]
+            foreignKeyName: "loan_votes_loan_id_fkey";
+            columns: ["loan_id"];
+            isOneToOne: false;
+            referencedRelation: "loan_risk_flags";
+            referencedColumns: ["loan_id"];
           },
           {
-            foreignKeyName: "loan_votes_loan_id_fkey"
-            columns: ["loan_id"]
-            isOneToOne: false
-            referencedRelation: "loans"
-            referencedColumns: ["id"]
+            foreignKeyName: "loan_votes_loan_id_fkey";
+            columns: ["loan_id"];
+            isOneToOne: false;
+            referencedRelation: "loans";
+            referencedColumns: ["id"];
           },
-        ]
-      }
+        ];
+      };
       loans: {
         Row: {
-          amount: number
-          auto_eligible: boolean
-          created_at: string
-          decision_at: string | null
-          eligibility_note: string | null
-          forwarded_at: string | null
-          forwarded_by: string | null
-          id: string
-          loan_type: Database["public"]["Enums"]["loan_type"]
-          member_id: string
-          purpose: string
-          rejection_reason: string | null
-          repayment_months: number
-          status: string
-          updated_at: string
-        }
+          amount: number;
+          auto_eligible: boolean;
+          created_at: string;
+          decision_at: string | null;
+          eligibility_note: string | null;
+          forwarded_at: string | null;
+          forwarded_by: string | null;
+          id: string;
+          loan_type: Database["public"]["Enums"]["loan_type"];
+          member_id: string;
+          purpose: string;
+          rejection_reason: string | null;
+          repayment_months: number;
+          status: string;
+          updated_at: string;
+        };
         Insert: {
-          amount: number
-          auto_eligible?: boolean
-          created_at?: string
-          decision_at?: string | null
-          eligibility_note?: string | null
-          forwarded_at?: string | null
-          forwarded_by?: string | null
-          id?: string
-          loan_type?: Database["public"]["Enums"]["loan_type"]
-          member_id: string
-          purpose: string
-          rejection_reason?: string | null
-          repayment_months: number
-          status?: string
-          updated_at?: string
-        }
+          amount: number;
+          auto_eligible?: boolean;
+          created_at?: string;
+          decision_at?: string | null;
+          eligibility_note?: string | null;
+          forwarded_at?: string | null;
+          forwarded_by?: string | null;
+          id?: string;
+          loan_type?: Database["public"]["Enums"]["loan_type"];
+          member_id: string;
+          purpose: string;
+          rejection_reason?: string | null;
+          repayment_months: number;
+          status?: string;
+          updated_at?: string;
+        };
         Update: {
-          amount?: number
-          auto_eligible?: boolean
-          created_at?: string
-          decision_at?: string | null
-          eligibility_note?: string | null
-          forwarded_at?: string | null
-          forwarded_by?: string | null
-          id?: string
-          loan_type?: Database["public"]["Enums"]["loan_type"]
-          member_id?: string
-          purpose?: string
-          rejection_reason?: string | null
-          repayment_months?: number
-          status?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "loans_member_id_profiles_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
+          amount?: number;
+          auto_eligible?: boolean;
+          created_at?: string;
+          decision_at?: string | null;
+          eligibility_note?: string | null;
+          forwarded_at?: string | null;
+          forwarded_by?: string | null;
+          id?: string;
+          loan_type?: Database["public"]["Enums"]["loan_type"];
+          member_id?: string;
+          purpose?: string;
+          rejection_reason?: string | null;
+          repayment_months?: number;
+          status?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       meeting_minutes: {
         Row: {
-          content: string
-          created_at: string
-          id: string
-          meeting_id: string
-          recorded_by: string | null
-          updated_at: string
-        }
+          content: string;
+          created_at: string;
+          id: string;
+          meeting_id: string;
+          recorded_by: string | null;
+          updated_at: string;
+        };
         Insert: {
-          content: string
-          created_at?: string
-          id?: string
-          meeting_id: string
-          recorded_by?: string | null
-          updated_at?: string
-        }
+          content: string;
+          created_at?: string;
+          id?: string;
+          meeting_id: string;
+          recorded_by?: string | null;
+          updated_at?: string;
+        };
         Update: {
-          content?: string
-          created_at?: string
-          id?: string
-          meeting_id?: string
-          recorded_by?: string | null
-          updated_at?: string
-        }
+          content?: string;
+          created_at?: string;
+          id?: string;
+          meeting_id?: string;
+          recorded_by?: string | null;
+          updated_at?: string;
+        };
         Relationships: [
           {
-            foreignKeyName: "meeting_minutes_meeting_id_fkey"
-            columns: ["meeting_id"]
-            isOneToOne: false
-            referencedRelation: "meetings"
-            referencedColumns: ["id"]
+            foreignKeyName: "meeting_minutes_meeting_id_fkey";
+            columns: ["meeting_id"];
+            isOneToOne: false;
+            referencedRelation: "meetings";
+            referencedColumns: ["id"];
           },
-        ]
-      }
+        ];
+      };
       meetings: {
         Row: {
-          agenda: string | null
-          created_at: string
-          created_by: string | null
-          id: string
-          location: string | null
-          scheduled_for: string
-          title: string
-          updated_at: string
-        }
+          agenda: string | null;
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          location: string | null;
+          scheduled_for: string;
+          title: string;
+          updated_at: string;
+        };
         Insert: {
-          agenda?: string | null
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          location?: string | null
-          scheduled_for: string
-          title: string
-          updated_at?: string
-        }
+          agenda?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          location?: string | null;
+          scheduled_for: string;
+          title: string;
+          updated_at?: string;
+        };
         Update: {
-          agenda?: string | null
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          location?: string | null
-          scheduled_for?: string
-          title?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
+          agenda?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          location?: string | null;
+          scheduled_for?: string;
+          title?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      pending_registrations: {
+        Row: {
+          admin_notes: string | null;
+          approved_at: string | null;
+          approved_by: string | null;
+          created_at: string;
+          email: string | null;
+          full_name: string | null;
+          id: string;
+          invite_sent: boolean | null;
+          invite_sent_at: string | null;
+          phone_number: string;
+          registration_channel: string;
+          requested_role: Database["public"]["Enums"]["app_role"];
+          status: string;
+          updated_at: string;
+        };
+        Insert: {
+          admin_notes?: string | null;
+          approved_at?: string | null;
+          approved_by?: string | null;
+          created_at?: string;
+          email?: string | null;
+          full_name?: string | null;
+          id?: string;
+          invite_sent?: boolean | null;
+          invite_sent_at?: string | null;
+          phone_number: string;
+          registration_channel?: string;
+          requested_role?: Database["public"]["Enums"]["app_role"];
+          status?: string;
+          updated_at?: string;
+        };
+        Update: {
+          admin_notes?: string | null;
+          approved_at?: string | null;
+          approved_by?: string | null;
+          created_at?: string;
+          email?: string | null;
+          full_name?: string | null;
+          id?: string;
+          invite_sent?: boolean | null;
+          invite_sent_at?: string | null;
+          phone_number?: string;
+          registration_channel?: string;
+          requested_role?: Database["public"]["Enums"]["app_role"];
+          status?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       profiles: {
         Row: {
-          anonymized_at: string | null
-          consent_given: boolean
-          consent_timestamp: string | null
-          consent_version: string | null
-          created_at: string
-          data_retention_until: string | null
-          email: string | null
-          full_name: string | null
-          id: string
-          is_anonymized: boolean
-          status: string
-          updated_at: string
-        }
+          anonymized_at: string | null;
+          consent_given: boolean;
+          consent_purpose: string | null;
+          consent_timestamp: string | null;
+          consent_version: string | null;
+          created_at: string;
+          data_retention_until: string | null;
+          email: string | null;
+          full_name: string | null;
+          id: string;
+          is_anonymized: boolean;
+          phone_number: string | null;
+          phone_only_member: boolean | null;
+          prefers_sms: boolean | null;
+          status: string;
+          updated_at: string;
+          whatsapp_opt_in: boolean | null;
+          whatsapp_opt_in_at: string | null;
+          whatsapp_verified: boolean | null;
+        };
         Insert: {
-          anonymized_at?: string | null
-          consent_given?: boolean
-          consent_timestamp?: string | null
-          consent_version?: string | null
-          created_at?: string
-          data_retention_until?: string | null
-          email?: string | null
-          full_name?: string | null
-          id: string
-          is_anonymized?: boolean
-          status?: string
-          updated_at?: string
-        }
+          anonymized_at?: string | null;
+          consent_given?: boolean;
+          consent_purpose?: string | null;
+          consent_timestamp?: string | null;
+          consent_version?: string | null;
+          created_at?: string;
+          data_retention_until?: string | null;
+          email?: string | null;
+          full_name?: string | null;
+          id: string;
+          is_anonymized?: boolean;
+          phone_number?: string | null;
+          phone_only_member?: boolean | null;
+          prefers_sms?: boolean | null;
+          status?: string;
+          updated_at?: string;
+          whatsapp_opt_in?: boolean | null;
+          whatsapp_opt_in_at?: string | null;
+          whatsapp_verified?: boolean | null;
+        };
         Update: {
-          anonymized_at?: string | null
-          consent_given?: boolean
-          consent_timestamp?: string | null
-          consent_version?: string | null
-          created_at?: string
-          data_retention_until?: string | null
-          email?: string | null
-          full_name?: string | null
-          id?: string
-          is_anonymized?: boolean
-          status?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
+          anonymized_at?: string | null;
+          consent_given?: boolean;
+          consent_purpose?: string | null;
+          consent_timestamp?: string | null;
+          consent_version?: string | null;
+          created_at?: string;
+          data_retention_until?: string | null;
+          email?: string | null;
+          full_name?: string | null;
+          id?: string;
+          is_anonymized?: boolean;
+          phone_number?: string | null;
+          phone_only_member?: boolean | null;
+          prefers_sms?: boolean | null;
+          status?: string;
+          updated_at?: string;
+          whatsapp_opt_in?: boolean | null;
+          whatsapp_opt_in_at?: string | null;
+          whatsapp_verified?: boolean | null;
+        };
+        Relationships: [];
+      };
       transactions: {
         Row: {
-          amount: number
-          category: string
-          created_at: string
-          created_by: string | null
-          currency: string
-          description: string | null
-          donor_id: string | null
-          id: string
-          occurred_on: string
-          reference: string | null
-          type: Database["public"]["Enums"]["transaction_type"]
-          updated_at: string
-        }
+          amount: number;
+          category: string;
+          created_at: string;
+          created_by: string | null;
+          currency: string;
+          description: string | null;
+          donor_id: string | null;
+          id: string;
+          occurred_on: string;
+          reference: string | null;
+          type: Database["public"]["Enums"]["transaction_type"];
+          updated_at: string;
+        };
         Insert: {
-          amount: number
-          category: string
-          created_at?: string
-          created_by?: string | null
-          currency?: string
-          description?: string | null
-          donor_id?: string | null
-          id?: string
-          occurred_on?: string
-          reference?: string | null
-          type: Database["public"]["Enums"]["transaction_type"]
-          updated_at?: string
-        }
+          amount: number;
+          category: string;
+          created_at?: string;
+          created_by?: string | null;
+          currency?: string;
+          description?: string | null;
+          donor_id?: string | null;
+          id?: string;
+          occurred_on?: string;
+          reference?: string | null;
+          type: Database["public"]["Enums"]["transaction_type"];
+          updated_at?: string;
+        };
         Update: {
-          amount?: number
-          category?: string
-          created_at?: string
-          created_by?: string | null
-          currency?: string
-          description?: string | null
-          donor_id?: string | null
-          id?: string
-          occurred_on?: string
-          reference?: string | null
-          type?: Database["public"]["Enums"]["transaction_type"]
-          updated_at?: string
-        }
+          amount?: number;
+          category?: string;
+          created_at?: string;
+          created_by?: string | null;
+          currency?: string;
+          description?: string | null;
+          donor_id?: string | null;
+          id?: string;
+          occurred_on?: string;
+          reference?: string | null;
+          type?: Database["public"]["Enums"]["transaction_type"];
+          updated_at?: string;
+        };
         Relationships: [
           {
-            foreignKeyName: "transactions_donor_id_fkey"
-            columns: ["donor_id"]
-            isOneToOne: false
-            referencedRelation: "donors"
-            referencedColumns: ["id"]
+            foreignKeyName: "transactions_donor_id_fkey";
+            columns: ["donor_id"];
+            isOneToOne: false;
+            referencedRelation: "donors";
+            referencedColumns: ["id"];
           },
-        ]
-      }
+        ];
+      };
       user_roles: {
         Row: {
-          created_at: string
-          id: string
-          role: Database["public"]["Enums"]["app_role"]
-          user_id: string
-        }
+          created_at: string;
+          id: string;
+          role: Database["public"]["Enums"]["app_role"];
+          user_id: string;
+        };
         Insert: {
-          created_at?: string
-          id?: string
-          role: Database["public"]["Enums"]["app_role"]
-          user_id: string
-        }
+          created_at?: string;
+          id?: string;
+          role: Database["public"]["Enums"]["app_role"];
+          user_id: string;
+        };
         Update: {
-          created_at?: string
-          id?: string
-          role?: Database["public"]["Enums"]["app_role"]
-          user_id?: string
-        }
-        Relationships: []
-      }
-    }
+          created_at?: string;
+          id?: string;
+          role?: Database["public"]["Enums"]["app_role"];
+          user_id?: string;
+        };
+        Relationships: [];
+      };
+      whatsapp_sessions: {
+        Row: {
+          channel: string;
+          collected_data: Json;
+          created_at: string;
+          expires_at: string | null;
+          id: string;
+          last_message_at: string;
+          phone_number: string;
+          step: string;
+        };
+        Insert: {
+          channel?: string;
+          collected_data?: Json;
+          created_at?: string;
+          expires_at?: string | null;
+          id?: string;
+          last_message_at?: string;
+          phone_number: string;
+          step?: string;
+        };
+        Update: {
+          channel?: string;
+          collected_data?: Json;
+          created_at?: string;
+          expires_at?: string | null;
+          id?: string;
+          last_message_at?: string;
+          phone_number?: string;
+          step?: string;
+        };
+        Relationships: [];
+      };
+    };
     Views: {
       loan_risk_flags: {
         Row: {
-          loan_amount: number | null
-          loan_id: string | null
-          loan_type: Database["public"]["Enums"]["loan_type"] | null
-          max_days_overdue: number | null
-          member_email: string | null
-          member_id: string | null
-          member_name: string | null
-          risk_tier: string | null
-          total_overdue_amount: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "loans_member_id_profiles_fkey"
-            columns: ["member_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-    }
+          loan_amount: number | null;
+          loan_id: string | null;
+          loan_status: string | null;
+          loan_type: Database["public"]["Enums"]["loan_type"] | null;
+          max_days_overdue: number | null;
+          member_email: string | null;
+          member_id: string | null;
+          member_name: string | null;
+          overdue_installments_count: number | null;
+          risk_tier: string | null;
+          total_overdue_amount: number | null;
+        };
+        Relationships: [];
+      };
+    };
     Functions: {
-      board_majority_count: { Args: never; Returns: number }
+      anonymize_member_data: {
+        Args: { _target_user_id: string };
+        Returns: undefined;
+      };
+      board_majority_count: { Args: never; Returns: number };
       has_any_role: {
         Args: {
-          _roles: Database["public"]["Enums"]["app_role"][]
-          _user_id: string
-        }
-        Returns: boolean
-      }
+          _roles: Database["public"]["Enums"]["app_role"][];
+          _user_id: string;
+        };
+        Returns: boolean;
+      };
       has_role: {
         Args: {
-          _role: Database["public"]["Enums"]["app_role"]
-          _user_id: string
-        }
-        Returns: boolean
-      }
-      is_approved: { Args: { _user_id: string }; Returns: boolean }
-    }
+          _role: Database["public"]["Enums"]["app_role"];
+          _user_id: string;
+        };
+        Returns: boolean;
+      };
+    };
     Enums: {
       app_role:
         | "admin"
@@ -595,134 +712,131 @@ export type Database = {
         | "treasurer"
         | "secretary"
         | "assistant_secretary"
-        | "board_member"
-      loan_type: "project" | "emergency"
-      transaction_type: "income" | "expense"
-    }
+        | "board_member";
+      loan_type: "project" | "emergency";
+      transaction_type: "income" | "expense";
+    };
     CompositeTypes: {
-      [_ in never]: never
-    }
-  }
-}
+      [_ in never]: never;
+    };
+  };
+};
 
-type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">;
 
-type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">];
 
 export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
   TableName extends (DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
+    schema: keyof DatabaseWithoutInternals;
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
     : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
+  schema: keyof DatabaseWithoutInternals;
 }
   ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
       DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
-      Row: infer R
+      Row: infer R;
     }
     ? R
     : never
-  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])
-    ? (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
-        Row: infer R
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] & DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R;
       }
       ? R
       : never
-    : never
+    : never;
 
 export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
+    keyof DefaultSchema["Tables"] | { schema: keyof DatabaseWithoutInternals },
   TableName extends (DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
+    schema: keyof DatabaseWithoutInternals;
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
+  schema: keyof DatabaseWithoutInternals;
 }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-      Insert: infer I
+      Insert: infer I;
     }
     ? I
     : never
   : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
     ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-        Insert: infer I
+        Insert: infer I;
       }
       ? I
       : never
-    : never
+    : never;
 
 export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
+    keyof DefaultSchema["Tables"] | { schema: keyof DatabaseWithoutInternals },
   TableName extends (DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
+    schema: keyof DatabaseWithoutInternals;
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
+  schema: keyof DatabaseWithoutInternals;
 }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-      Update: infer U
+      Update: infer U;
     }
     ? U
     : never
   : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
     ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-        Update: infer U
+        Update: infer U;
       }
       ? U
       : never
-    : never
+    : never;
 
 export type Enums<
   DefaultSchemaEnumNameOrOptions extends
-    | keyof DefaultSchema["Enums"]
-    | { schema: keyof DatabaseWithoutInternals },
+    keyof DefaultSchema["Enums"] | { schema: keyof DatabaseWithoutInternals },
   EnumName extends (DefaultSchemaEnumNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
+    schema: keyof DatabaseWithoutInternals;
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
     : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
+  schema: keyof DatabaseWithoutInternals;
 }
   ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
     ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
-    : never
+    : never;
 
 export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
-    | keyof DefaultSchema["CompositeTypes"]
-    | { schema: keyof DatabaseWithoutInternals },
+    keyof DefaultSchema["CompositeTypes"] | { schema: keyof DatabaseWithoutInternals },
   CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
+    schema: keyof DatabaseWithoutInternals;
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
     : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
+  schema: keyof DatabaseWithoutInternals;
 }
   ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
-    : never
+    : never;
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       app_role: [
@@ -738,4 +852,4 @@ export const Constants = {
       transaction_type: ["income", "expense"],
     },
   },
-} as const
+} as const;
