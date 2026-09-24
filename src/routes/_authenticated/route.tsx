@@ -37,7 +37,9 @@ import {
   Gavel,
   ScrollText,
   FileSpreadsheet,
+  MessageCircle,
 } from "lucide-react";
+import { FOUNDATION } from "@/lib/foundation";
 import { useRoles } from "@/hooks/use-roles";
 
 export const Route = createFileRoute("/_authenticated")({
@@ -113,7 +115,8 @@ function AuthedLayout() {
     adminItems.push({ title: "Loan Rules", url: "/loan-rules", icon: Settings });
   }
 
-  const allItems = [...memberItems, ...financeItems, ...adminItems];
+  const helpItems: Item[] = [{ title: "Bot Guide", url: "/bot-help", icon: MessageCircle }];
+  const allItems = [...memberItems, ...financeItems, ...adminItems, ...helpItems];
   const activeTitle = allItems.find((i) => i.url === path)?.title ?? "Overview";
 
   return (
@@ -194,6 +197,24 @@ function AuthedLayout() {
                 </SidebarGroupContent>
               </SidebarGroup>
             )}
+
+            <SidebarGroup>
+              <SidebarGroupLabel>Help</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {helpItems.map((item) => (
+                    <SidebarMenuItem key={item.url}>
+                      <SidebarMenuButton asChild isActive={path === item.url}>
+                        <Link to={item.url} className="flex items-center gap-2">
+                          <item.icon className="h-4 w-4" />
+                          <span>{item.title}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
           </SidebarContent>
 
           <SidebarFooter className="border-t border-sidebar-border">
@@ -224,6 +245,25 @@ function AuthedLayout() {
           <main className="flex-1 bg-background p-6">
             <Outlet />
           </main>
+          <footer className="border-t border-border bg-card px-6 py-4 text-xs leading-relaxed text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+              <strong className="text-foreground">{FOUNDATION.name}</strong>
+              <span>
+                Admin (WhatsApp & calls):{" "}
+                <a href={`tel:${FOUNDATION.adminPhone}`} className="underline">
+                  {FOUNDATION.adminPhone}
+                </a>
+              </span>
+              <span>
+                Paybill: <strong>{FOUNDATION.paybill}</strong> · Account:{" "}
+                <strong>{FOUNDATION.account}</strong>
+              </span>
+              <a href={FOUNDATION.website} className="underline">
+                murage-funds-hub.vercel.app
+              </a>
+            </div>
+            <div className="mt-1">{FOUNDATION.registration}.</div>
+          </footer>
         </div>
       </div>
     </SidebarProvider>
