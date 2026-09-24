@@ -36,5 +36,17 @@ export default tseslint.config(
       "@typescript-eslint/no-unused-vars": "off",
     },
   },
+  // Radix/shadcn UI modules intentionally export variant helpers and hooks
+  // alongside components; those exports are part of their public API.
+  {
+    files: ["src/components/ui/**/*.{ts,tsx}"],
+    rules: { "react-refresh/only-export-components": "off" },
+  },
   eslintPluginPrettier,
+  // Supabase generates these types/clients in its own style. Keep code-quality
+  // rules while avoiding whole-file rewrites whenever the schema is updated.
+  {
+    files: ["src/integrations/supabase/*.ts"],
+    rules: { "prettier/prettier": "off" },
+  },
 );

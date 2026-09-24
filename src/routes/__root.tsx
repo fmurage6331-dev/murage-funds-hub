@@ -6,6 +6,7 @@ import {
   useRouter,
   HeadContent,
   Scripts,
+  type ErrorComponentProps,
 } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
 
@@ -34,11 +35,13 @@ function NotFoundComponent() {
   );
 }
 
-function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
+function ErrorComponent({ error, reset }: ErrorComponentProps) {
   console.error(error);
   const router = useRouter();
   useEffect(() => {
-    reportLovableError(error, { boundary: "tanstack_root_error_component" });
+    reportLovableError(error instanceof Error ? error : new Error(String(error)), {
+      boundary: "tanstack_root_error_component",
+    });
   }, [error]);
 
   return (
@@ -50,12 +53,18 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
         </p>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
-            onClick={() => { router.invalidate(); reset(); }}
+            onClick={() => {
+              router.invalidate();
+              reset();
+            }}
             className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
           >
             Try again
           </button>
-          <a href="/" className="rounded-md border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent">
+          <a
+            href="/"
+            className="rounded-md border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent"
+          >
             Go home
           </a>
         </div>
@@ -70,15 +79,32 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Murage Foundation — Financial Records" },
-      { name: "description", content: "Internal system for managing Murage Foundation's donors, income and expenses." },
+      {
+        name: "description",
+        content: "Internal system for managing Murage Foundation's donors, income and expenses.",
+      },
       { property: "og:title", content: "Murage Foundation — Financial Records" },
-      { property: "og:description", content: "Internal system for managing Murage Foundation's donors, income and expenses." },
+      {
+        property: "og:description",
+        content: "Internal system for managing Murage Foundation's donors, income and expenses.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: "Murage Foundation — Financial Records" },
-      { name: "twitter:description", content: "Internal system for managing Murage Foundation's donors, income and expenses." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/e1eb299c-f148-4213-880a-e63661ef3c9c/id-preview-1b7aacc2--4edecba3-b911-4cf8-bfd8-547c7dd78e46.lovable.app-1783949651549.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/e1eb299c-f148-4213-880a-e63661ef3c9c/id-preview-1b7aacc2--4edecba3-b911-4cf8-bfd8-547c7dd78e46.lovable.app-1783949651549.png" },
+      {
+        name: "twitter:description",
+        content: "Internal system for managing Murage Foundation's donors, income and expenses.",
+      },
+      {
+        property: "og:image",
+        content:
+          "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/e1eb299c-f148-4213-880a-e63661ef3c9c/id-preview-1b7aacc2--4edecba3-b911-4cf8-bfd8-547c7dd78e46.lovable.app-1783949651549.png",
+      },
+      {
+        name: "twitter:image",
+        content:
+          "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/e1eb299c-f148-4213-880a-e63661ef3c9c/id-preview-1b7aacc2--4edecba3-b911-4cf8-bfd8-547c7dd78e46.lovable.app-1783949651549.png",
+      },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
@@ -100,7 +126,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 function RootShell({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <head><HeadContent /></head>
+      <head>
+        <HeadContent />
+      </head>
       <body>
         {children}
         <Scripts />
