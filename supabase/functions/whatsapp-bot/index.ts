@@ -1,5 +1,5 @@
 import type { Json, Database } from "../../../src/integrations/supabase/types.ts";
-import { getServiceClient, jsonResponse } from "../_shared/supabase.ts";
+import { getServiceClient } from "../_shared/supabase.ts";
 import {
   getMemberByPhone,
   isOfficer,
@@ -18,7 +18,7 @@ import {
   type JoinStep,
 } from "../_shared/bot-utils.ts";
 import { advanceJoin, promptFor, sessionExpired, type Collected } from "../_shared/bot-flow.ts";
-import { parseInbound } from "../_shared/inbound.ts";
+import { handleWebhook } from "../_shared/webhook.ts";
 
 type Session = Database["public"]["Tables"]["whatsapp_sessions"]["Row"];
 type Installment = Pick<
@@ -605,44 +605,11 @@ async function handleMessage(phone: string, channel: Channel, text: string): Pro
   }
 }
 
-function sameSecret(expected: string, provided: string): boolean {
-  const a = new TextEncoder().encode(expected);
-  const b = new TextEncoder().encode(provided);
-  let difference = a.length ^ b.length;
-  for (let i = 0; i < Math.max(a.length, b.length); i++) difference |= (a[i] ?? 0) ^ (b[i] ?? 0);
-  return difference === 0;
-}
-
-Deno.serve(async (req: Request): Promise<Response> => {
-  // AT retries anything but HTTP 200. Authentication, parse and DB failures
-  // all return 200, but MUST NOT perform any mutations on unauthorized calls.
-  try {
-    if (req.method !== "POST") return jsonResponse({ received: true });
-    const secret = Deno.env.get("AFRICASTALKING_WEBHOOK_SECRET");
-    const provided =
-      new URL(req.url).searchParams.get("token") ?? req.headers.get("x-at-webhook-secret") ?? "";
-    if (!secret || !sameSecret(secret, provided)) {
-      console.error("[whatsapp-bot] Webhook authentication missing or invalid");
-      return jsonResponse({ received: true });
-    }
-    if (Number(req.headers.get("content-length") ?? 0) > 4096) {
-      return jsonResponse({ received: true });
-    }
-    const inbound = parseInbound(
-      await req.text(),
-      (req.headers.get("content-type") ?? "").toLowerCase(),
-    );
-    if (!inbound) return jsonResponse({ received: true });
-    const phone = normalizePhone(inbound.from);
-    const channel = inbound.channel;
-    const reply = await handleMessage(phone, channel, inbound.text);
-    try {
-      await sendMessage({ to: phone, message: reply, channel });
-    } catch (error) {
-      console.error("[whatsapp-bot] Reply delivery failed:", error);
-    }
-  } catch (error) {
-    console.error("[whatsapp-bot] Webhook error (acknowledging AT):", error);
-  }
-  return jsonResponse({ received: true });
-});
+Deno.serve((req: Request) =>
+  handleWebhook(req, {
+    webhookSecret: Deno.env.get("AFRICASTALKING_WEBHOOK_SECRET"),
+    handleMessage,
+    sendMessage,
+    logError: (message, error) => console.error(message, error),
+  }),
+);

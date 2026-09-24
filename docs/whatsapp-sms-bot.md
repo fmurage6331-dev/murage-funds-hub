@@ -11,6 +11,15 @@ Only a callback with the configured shared secret can read or change data.
 
 ## Deploy in order
 
+**Read-only preflight:** Run the three queries in
+`supabase/preflight/whatsapp_sms_bot.sql` in the target project's SQL editor
+_before_ applying the migration. All three should return zero rows: they find
+normalized-phone collisions, duplicate M-Pesa codes (including legacy web
+`reference` values), and orphaned member foreign keys. Resolve any results
+with the member/treasurer rather than deleting financial records. The phone
+query may return private contact details; do not post its output in a PR or
+public log. Run this against the actual target project, not a local mock.
+
 1. Link the Supabase project `cbfciiehhpkpdtxrltrc` and apply
    `supabase/migrations/20260924120000_whatsapp_sms_bot.sql` **before** the app
    or Functions. Review duplicate legacy phone numbers/M-Pesa references first:
@@ -19,13 +28,35 @@ Only a callback with the configured shared secret can read or change data.
    to `public.profiles`, allowing phone-only profiles and their roles, loans and
    contributions without an auth user. It creates the bot tables, an
    admin-only RLS policy for pending registrations, a Realtime publication entry,
-   and a service-only, once-per-event notification claim.
+   and a service-only, once-per-event notification claim. With the Supabase
+   CLI authenticated in your deployment environment, the commands are:
+
+   ```bash
+   npx supabase link --project-ref cbfciiehhpkpdtxrltrc
+   npx supabase db push
+   ```
+
+   Review the SQL Editor preflight results and take a database backup **before**
+   `db push`; do not run it against an unexpected project or paste credentials
+   into chat. These commands have not been run in this workspace.
+
 2. Deploy `whatsapp-bot`, `review-registration` and `notify-event` from the
    repository root with Supabase CLI. `supabase/config.toml` disables JWT
    verification **only** for `whatsapp-bot`: AT does not send a Supabase JWT.
    Admin review and event notification Functions require a valid signed-in
    officer and check their current role server-side. Never give these Functions
    a public/anonymous service-role endpoint.
+
+   ```bash
+   npx supabase functions deploy whatsapp-bot --no-verify-jwt
+   npx supabase functions deploy review-registration
+   npx supabase functions deploy notify-event
+   ```
+
+   Confirm the configured Edge secrets are present in the target project
+   before enabling the AT callback. The webhook secret must match the callback
+   URL; never paste its value into chat or a public issue.
+
 3. Set the Supabase Auth allowed redirect URL to
    `https://murage-funds-hub.vercel.app/set-password` (and the appropriate
    local preview URL when testing). Email applicants receive a short-lived
@@ -72,11 +103,13 @@ provider template IDs.
 
 ## Test without real money
 
-Run `npm run test:bot`, `npm run lint`, `npx tsc --noEmit`, `npm run build` and
-`npx deno check --node-modules-dir=auto` on the Function entrypoints. There
-are unit tests for Kenyan phone normalization, DEPOSIT validation, the JOIN
+Run `npm run test:bot`, `npm run lint`, `npx tsc --noEmit`, `npm run build`
+and `npx --yes deno check --no-lock --node-modules-dir=auto` on the Function
+entrypoints. There are unit tests for Kenyan phone normalization, DEPOSIT validation, the JOIN
 consent/role/email/SKIP steps, interruption handling, session expiry,
-Kenyan date boundaries, and SMS/WhatsApp callback parsers.
+Kenyan date boundaries, SMS/WhatsApp callback parsing, outbound AT API
+payloads/error responses, and webhook HTTP 200/authentication/delivery-failure
+behavior.
 
 Use the AT sandbox SMS simulator to send `JOIN`, complete the prompts, and
 approve an applicant at `/users` → **Pending Registrations**. Or submit a

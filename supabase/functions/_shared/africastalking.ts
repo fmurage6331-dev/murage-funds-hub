@@ -1,91 +1,26 @@
 import type { Database } from "../../../src/integrations/supabase/types.ts";
 import { getServiceClient } from "./supabase.ts";
-import { normalizePhone, type Channel } from "./bot-utils.ts";
+import { normalizePhone } from "./bot-utils.ts";
+import { sendViaAfricaTalking, type OutboundMessage } from "./at-provider.ts";
 
 export { normalizePhone } from "./bot-utils.ts";
 export type { Channel } from "./bot-utils.ts";
 export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 
-/** AT's SMS and WhatsApp APIs have DIFFERENT hosts, paths and request formats. */
-export async function sendMessage({
-  to,
-  message,
-  channel,
-}: {
-  to: string;
-  message: string;
-  channel: Channel;
-}): Promise<void> {
-  const recipient = `+${normalizePhone(to)}`;
-  const username = Deno.env.get("AFRICASTALKING_USERNAME");
-  const apiKey = Deno.env.get("AFRICASTALKING_API_KEY");
-  if (!username || !apiKey) throw new Error("Africa's Talking credentials are not configured");
-  const sandbox = Deno.env.get("AFRICASTALKING_ENV") !== "live";
-
+/** Send with server-only credentials; never log the body (which may contain login links). */
+export async function sendMessage(outbound: OutboundMessage): Promise<void> {
   try {
-    let response: Response;
-    if (channel === "sms") {
-      const form = new URLSearchParams({ username, to: recipient, message });
-      const sender = Deno.env.get("AFRICASTALKING_SMS_SENDER_ID");
-      if (sender) form.set("from", sender);
-      response = await fetch(
-        `${sandbox ? "https://api.sandbox.africastalking.com" : "https://api.africastalking.com"}/version1/messaging`,
-        {
-          method: "POST",
-          headers: {
-            apiKey,
-            Accept: "application/json",
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
-          body: form,
-        },
-      );
-    } else {
-      // This is the registered AT WhatsApp SENDER, not the admin's contact
-      // number. AT currently lists its WhatsApp sandbox as 'coming soon'.
-      const waNumber = Deno.env.get("AFRICASTALKING_WHATSAPP_NUMBER");
-      if (!waNumber) throw new Error("AFRICASTALKING_WHATSAPP_NUMBER is required for WhatsApp");
-      response = await fetch(
-        `${sandbox ? "https://chat.sandbox.africastalking.com" : "https://chat.africastalking.com"}/whatsapp/message/send`,
-        {
-          method: "POST",
-          headers: { apiKey, Accept: "application/json", "Content-Type": "application/json" },
-          body: JSON.stringify({
-            username,
-            waNumber: `+${normalizePhone(waNumber)}`,
-            phoneNumber: recipient,
-            body: { message },
-          }),
-        },
-      );
-    }
-
-    if (!response.ok) throw new Error(`AT ${channel} request failed (HTTP ${response.status})`);
-    const result: unknown = await response.json();
-    if (channel === "sms") {
-      const recipients =
-        isObject(result) && isObject(result.SMSMessageData)
-          ? result.SMSMessageData.Recipients
-          : undefined;
-      const first = Array.isArray(recipients) ? (recipients[0] as unknown) : undefined;
-      if (!isObject(first) || (first.statusCode !== 101 && first.status !== "Success")) {
-        throw new Error("AT SMS rejected the message");
-      }
-    } else if (
-      !isObject(result) ||
-      !["SENT", "DELIVERED", "READ"].includes(String(result.status))
-    ) {
-      throw new Error("AT WhatsApp rejected the message");
-    }
+    await sendViaAfricaTalking(outbound, {
+      username: Deno.env.get("AFRICASTALKING_USERNAME"),
+      apiKey: Deno.env.get("AFRICASTALKING_API_KEY"),
+      environment: Deno.env.get("AFRICASTALKING_ENV"),
+      whatsappNumber: Deno.env.get("AFRICASTALKING_WHATSAPP_NUMBER"),
+      smsSenderId: Deno.env.get("AFRICASTALKING_SMS_SENDER_ID"),
+    });
   } catch (error) {
-    // Never log API credentials or message bodies (may contain account links).
-    console.error(`[Africa's Talking] ${channel} delivery failed:`, error);
+    console.error(`[Africa's Talking] ${outbound.channel} delivery failed:`, error);
     throw error;
   }
-}
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 export async function getMemberByPhone(phone: string): Promise<Profile | null> {
