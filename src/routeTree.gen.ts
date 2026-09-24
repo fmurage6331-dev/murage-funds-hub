@@ -15,6 +15,8 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as PendingApprovalRouteImport } from './routes/pending-approval'
 import { Route as SetPasswordRouteImport } from './routes/set-password'
 import { Route as AuthenticatedAuditLogsRouteImport } from './routes/_authenticated/audit-logs'
+import { Route as AuthenticatedBotHelpRouteImport } from './routes/_authenticated/bot-help'
+import { Route as AuthenticatedContributionsRouteImport } from './routes/_authenticated/contributions'
 import { Route as AuthenticatedContributionsReviewRouteImport } from './routes/_authenticated/contributions-review'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedDonorsRouteImport } from './routes/_authenticated/donors'
@@ -57,6 +59,17 @@ const AuthenticatedAuditLogsRoute = AuthenticatedAuditLogsRouteImport.update({
   path: '/audit-logs',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedBotHelpRoute = AuthenticatedBotHelpRouteImport.update({
+  id: '/bot-help',
+  path: '/bot-help',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedContributionsRoute =
+  AuthenticatedContributionsRouteImport.update({
+    id: '/contributions',
+    path: '/contributions',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedContributionsReviewRoute =
   AuthenticatedContributionsReviewRouteImport.update({
     id: '/contributions-review',
@@ -129,6 +142,8 @@ export interface FileRoutesByFullPath {
   '/pending-approval': typeof PendingApprovalRoute
   '/set-password': typeof SetPasswordRoute
   '/audit-logs': typeof AuthenticatedAuditLogsRoute
+  '/bot-help': typeof AuthenticatedBotHelpRoute
+  '/contributions': typeof AuthenticatedContributionsRoute
   '/contributions-review': typeof AuthenticatedContributionsReviewRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/donors': typeof AuthenticatedDonorsRoute
@@ -148,6 +163,8 @@ export interface FileRoutesByTo {
   '/pending-approval': typeof PendingApprovalRoute
   '/set-password': typeof SetPasswordRoute
   '/audit-logs': typeof AuthenticatedAuditLogsRoute
+  '/bot-help': typeof AuthenticatedBotHelpRoute
+  '/contributions': typeof AuthenticatedContributionsRoute
   '/contributions-review': typeof AuthenticatedContributionsReviewRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/donors': typeof AuthenticatedDonorsRoute
@@ -169,6 +186,8 @@ export interface FileRoutesById {
   '/pending-approval': typeof PendingApprovalRoute
   '/set-password': typeof SetPasswordRoute
   '/_authenticated/audit-logs': typeof AuthenticatedAuditLogsRoute
+  '/_authenticated/bot-help': typeof AuthenticatedBotHelpRoute
+  '/_authenticated/contributions': typeof AuthenticatedContributionsRoute
   '/_authenticated/contributions-review': typeof AuthenticatedContributionsReviewRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/donors': typeof AuthenticatedDonorsRoute
@@ -190,6 +209,8 @@ export interface FileRouteTypes {
     | '/pending-approval'
     | '/set-password'
     | '/audit-logs'
+    | '/bot-help'
+    | '/contributions'
     | '/contributions-review'
     | '/dashboard'
     | '/donors'
@@ -209,6 +230,8 @@ export interface FileRouteTypes {
     | '/pending-approval'
     | '/set-password'
     | '/audit-logs'
+    | '/bot-help'
+    | '/contributions'
     | '/contributions-review'
     | '/dashboard'
     | '/donors'
@@ -229,6 +252,8 @@ export interface FileRouteTypes {
     | '/pending-approval'
     | '/set-password'
     | '/_authenticated/audit-logs'
+    | '/_authenticated/bot-help'
+    | '/_authenticated/contributions'
     | '/_authenticated/contributions-review'
     | '/_authenticated/dashboard'
     | '/_authenticated/donors'
@@ -293,6 +318,20 @@ declare module '@tanstack/react-router' {
       path: '/audit-logs'
       fullPath: '/audit-logs'
       preLoaderRoute: typeof AuthenticatedAuditLogsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/bot-help': {
+      id: '/_authenticated/bot-help'
+      path: '/bot-help'
+      fullPath: '/bot-help'
+      preLoaderRoute: typeof AuthenticatedBotHelpRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/contributions': {
+      id: '/_authenticated/contributions'
+      path: '/contributions'
+      fullPath: '/contributions'
+      preLoaderRoute: typeof AuthenticatedContributionsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/contributions-review': {
@@ -384,6 +423,8 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAuditLogsRoute: typeof AuthenticatedAuditLogsRoute
+  AuthenticatedBotHelpRoute: typeof AuthenticatedBotHelpRoute
+  AuthenticatedContributionsRoute: typeof AuthenticatedContributionsRoute
   AuthenticatedContributionsReviewRoute: typeof AuthenticatedContributionsReviewRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedDonorsRoute: typeof AuthenticatedDonorsRoute
@@ -400,6 +441,8 @@ interface AuthenticatedRouteRouteChildren {
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAuditLogsRoute: AuthenticatedAuditLogsRoute,
+  AuthenticatedBotHelpRoute: AuthenticatedBotHelpRoute,
+  AuthenticatedContributionsRoute: AuthenticatedContributionsRoute,
   AuthenticatedContributionsReviewRoute: AuthenticatedContributionsReviewRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedDonorsRoute: AuthenticatedDonorsRoute,

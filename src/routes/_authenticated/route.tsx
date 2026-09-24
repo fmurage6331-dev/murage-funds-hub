@@ -37,8 +37,10 @@ import {
   Gavel,
   ScrollText,
   FileSpreadsheet,
+  MessageCircleQuestionMark,
 } from "lucide-react";
 import { useRoles } from "@/hooks/use-roles";
+import { foundation, payment } from "@/lib/foundation";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
@@ -113,7 +115,8 @@ function AuthedLayout() {
     adminItems.push({ title: "Loan Rules", url: "/loan-rules", icon: Settings });
   }
 
-  const allItems = [...memberItems, ...financeItems, ...adminItems];
+  const helpItems: Item[] = [{ title: "WhatsApp & SMS Bot Guide", url: "/bot-help", icon: MessageCircleQuestionMark }];
+  const allItems = [...memberItems, ...financeItems, ...adminItems, ...helpItems];
   const activeTitle = allItems.find((i) => i.url === path)?.title ?? "Overview";
 
   return (
@@ -194,6 +197,24 @@ function AuthedLayout() {
                 </SidebarGroupContent>
               </SidebarGroup>
             )}
+
+            <SidebarGroup>
+              <SidebarGroupLabel>Help</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {helpItems.map((item) => (
+                    <SidebarMenuItem key={item.url}>
+                      <SidebarMenuButton asChild isActive={path === item.url}>
+                        <Link to={item.url} className="flex items-center gap-2">
+                          <item.icon className="h-4 w-4" />
+                          <span>Bot Guide</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
           </SidebarContent>
 
           <SidebarFooter className="border-t border-sidebar-border">
@@ -224,6 +245,19 @@ function AuthedLayout() {
           <main className="flex-1 bg-background p-6">
             <Outlet />
           </main>
+          <footer className="border-t border-border bg-card px-6 py-5 text-xs text-muted-foreground">
+            <div className="mx-auto flex max-w-6xl flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="font-serif text-base font-semibold text-primary">{foundation.name}</p>
+                <p className="mt-1">{foundation.registrationStatus}</p>
+              </div>
+              <div className="space-y-1">
+                <p>Admin (WhatsApp & calls): <a className="text-primary underline" href={`tel:${foundation.adminPhone}`}>{foundation.adminPhone}</a></p>
+                <p>Paybill: <strong className="text-foreground">{payment.paybill}</strong> · Account No: <strong className="text-foreground">{payment.account}</strong></p>
+                <a className="block text-primary underline" href={foundation.webUrl}>{foundation.webUrl.replace("https://", "")}</a>
+              </div>
+            </div>
+          </footer>
         </div>
       </div>
     </SidebarProvider>

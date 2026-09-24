@@ -11,6 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { PaymentInfoCard } from "@/components/PaymentInfoCard";
+import { payment } from "@/lib/foundation";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -50,12 +52,18 @@ function MyContributionsPage() {
 
   const create = useMutation({
     mutationFn: async () => {
+      const reference = form.reference.trim().toUpperCase();
+      if (form.method === "mpesa" && !/^[A-Z0-9-]{5,30}$/.test(reference)) {
+        throw new Error("Enter the M-Pesa confirmation reference (5–30 letters or numbers).");
+      }
       const { error } = await supabase.from("contributions").insert({
         member_id: user.id,
         amount: Number(form.amount),
         contributed_on: form.contributed_on,
         method: form.method,
-        reference: form.reference || null,
+        reference: reference || null,
+        mpesa_transaction_id: form.method === "mpesa" ? reference : null,
+        paybill_number: form.method === "mpesa" ? payment.paybill : null,
         notes: form.notes || null,
       });
       if (error) throw error;
@@ -116,7 +124,7 @@ function MyContributionsPage() {
               </div>
               <div>
                 <Label>Reference / transaction code</Label>
-                <Input value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} placeholder="e.g. QJ7X1A2B3C" />
+                <Input required={form.method === "mpesa"} value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} placeholder="e.g. QJ7X1A2B3C" />
               </div>
               <div>
                 <Label>Notes</Label>
@@ -129,6 +137,8 @@ function MyContributionsPage() {
           </DialogContent>
         </Dialog>
       </div>
+
+      <PaymentInfoCard />
 
       <div className="grid gap-3 sm:grid-cols-2">
         <Card className="p-4">
