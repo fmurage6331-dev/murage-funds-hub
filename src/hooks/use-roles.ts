@@ -30,6 +30,12 @@ export function useRoles(userId: string | undefined) {
     canConfirmContribs: hasAny(["admin", "treasurer"]),
     canForwardLoans: hasAny(["admin", "chairman", "treasurer"]),
     canManageMeetings: hasAny(["admin", "secretary", "assistant_secretary"]),
-    canViewFinancials: hasAny(["admin", "treasurer", "chairman", "secretary", "assistant_secretary"]),
+    canViewFinancials: hasAny([
+      "admin",
+      "treasurer",
+      "chairman",
+      "secretary",
+      "assistant_secretary",
+    ]),
   };
 }

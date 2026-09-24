@@ -115,7 +115,9 @@ function AuthedLayout() {
     adminItems.push({ title: "Loan Rules", url: "/loan-rules", icon: Settings });
   }
 
-  const helpItems: Item[] = [{ title: "WhatsApp & SMS Bot Guide", url: "/bot-help", icon: MessageCircleQuestionMark }];
+  const helpItems: Item[] = [
+    { title: "WhatsApp & SMS Bot Guide", url: "/bot-help", icon: MessageCircleQuestionMark },
+  ];
   const allItems = [...memberItems, ...financeItems, ...adminItems, ...helpItems];
   const activeTitle = allItems.find((i) => i.url === path)?.title ?? "Overview";
 
@@ -252,9 +254,19 @@ function AuthedLayout() {
                 <p className="mt-1">{foundation.registrationStatus}</p>
               </div>
               <div className="space-y-1">
-                <p>Admin (WhatsApp & calls): <a className="text-primary underline" href={`tel:${foundation.adminPhone}`}>{foundation.adminPhone}</a></p>
-                <p>Paybill: <strong className="text-foreground">{payment.paybill}</strong> · Account No: <strong className="text-foreground">{payment.account}</strong></p>
-                <a className="block text-primary underline" href={foundation.webUrl}>{foundation.webUrl.replace("https://", "")}</a>
+                <p>
+                  Admin (WhatsApp & calls):{" "}
+                  <a className="text-primary underline" href={`tel:${foundation.adminPhone}`}>
+                    {foundation.adminPhone}
+                  </a>
+                </p>
+                <p>
+                  Paybill: <strong className="text-foreground">{payment.paybill}</strong> · Account
+                  No: <strong className="text-foreground">{payment.account}</strong>
+                </p>
+                <a className="block text-primary underline" href={foundation.webUrl}>
+                  {foundation.webUrl.replace("https://", "")}
+                </a>
               </div>
             </div>
           </footer>

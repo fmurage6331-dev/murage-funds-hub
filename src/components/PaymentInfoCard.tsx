@@ -20,7 +20,9 @@ export function PaymentInfoCard() {
             { label: "Account", value: payment.account },
           ].map(({ label, value }) => (
             <div key={label}>
-              <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</dt>
+              <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                {label}
+              </dt>
               <dd className="mt-1 font-semibold text-foreground">{value}</dd>
             </div>
           ))}
@@ -29,8 +31,13 @@ export function PaymentInfoCard() {
           <Smartphone className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
           <span>
             After paying, submit your M-Pesa reference on My Contributions or text{" "}
-            <code className="rounded bg-muted px-1 text-foreground">DEPOSIT {"{amount} {ref}"}</code>{" "}
-            to our WhatsApp/SMS bot. <Link to="/bot-help" className="font-medium text-primary underline underline-offset-2">Bot guide</Link>
+            <code className="rounded bg-muted px-1 text-foreground">
+              DEPOSIT {"{amount} {ref}"}
+            </code>{" "}
+            to our WhatsApp/SMS bot.{" "}
+            <Link to="/bot-help" className="font-medium text-primary underline underline-offset-2">
+              Bot guide
+            </Link>
           </span>
         </p>
       </CardContent>

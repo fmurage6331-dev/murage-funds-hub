@@ -2,7 +2,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -11,7 +10,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -20,15 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Printer,
-  Download,
-  FileSpreadsheet,
-  Landmark,
-  Calendar,
-  Leaf,
-  CheckCircle2,
-} from "lucide-react";
+import { Printer, FileSpreadsheet, Calendar, Leaf } from "lucide-react";
 import { useRoles } from "@/hooks/use-roles";
 
 export const Route = createFileRoute("/_authenticated/financial-statements")({
@@ -51,7 +41,7 @@ function FinancialStatementsPage() {
   const [periodType, setPeriodType] = useState<string>("Q3"); // Q1, Q2, Q3, Q4, ANNUAL
 
   // Fetch all transactions
-  const { data: transactions = [], isLoading: txLoading } = useQuery({
+  const { data: transactions = [] } = useQuery({
     queryKey: ["transactions", "statement"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -64,7 +54,7 @@ function FinancialStatementsPage() {
   });
 
   // Fetch all loans & repayments
-  const { data: loans = [], isLoading: loansLoading } = useQuery({
+  const { data: loans = [] } = useQuery({
     queryKey: ["loans", "statement"],
     queryFn: async () => {
       const { data, error } = await supabase.from("loans").select("*, loan_repayments(*)");
@@ -74,7 +64,7 @@ function FinancialStatementsPage() {
   });
 
   // Fetch confirmed member contributions
-  const { data: contributions = [], isLoading: contribsLoading } = useQuery({
+  const { data: contributions = [] } = useQuery({
     queryKey: ["contributions", "statement"],
     queryFn: async () => {
       const { data, error } = await supabase

@@ -91,7 +91,10 @@ function Page() {
     <div className="mx-auto max-w-2xl space-y-4">
       <div>
         <h2 className="font-serif text-2xl font-semibold text-primary">Loan Rules</h2>
-        <p className="text-sm text-muted-foreground">Eligibility criteria used when a member submits a loan request, set separately per loan type.</p>
+        <p className="text-sm text-muted-foreground">
+          Eligibility criteria used when a member submits a loan request, set separately per loan
+          type.
+        </p>
       </div>
 
       <Tabs value={loanType} onValueChange={(v) => setLoanType(v as LoanType)}>
@@ -101,39 +104,78 @@ function Page() {
         </TabsList>
       </Tabs>
 
-    <Card className="p-5">
-        <form onSubmit={(e) => { e.preventDefault(); save.mutate(); }} className="space-y-4">
+      <Card className="p-5">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            save.mutate();
+          }}
+          className="space-y-4"
+        >
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>Max multiplier of confirmed contributions</Label>
-              <Input type="number" step="0.1" min="0" value={form.max_multiplier} onChange={(e) => setForm({ ...form, max_multiplier: e.target.value })} />
+              <Input
+                type="number"
+                step="0.1"
+                min="0"
+                value={form.max_multiplier}
+                onChange={(e) => setForm({ ...form, max_multiplier: e.target.value })}
+              />
             </div>
             <div>
               <Label>Max loan amount (KES)</Label>
-              <Input type="number" min="0" value={form.max_amount} onChange={(e) => setForm({ ...form, max_amount: e.target.value })} />
+              <Input
+                type="number"
+                min="0"
+                value={form.max_amount}
+                onChange={(e) => setForm({ ...form, max_amount: e.target.value })}
+              />
             </div>
             <div>
               <Label>Minimum membership (days)</Label>
-              <Input type="number" min="0" value={form.min_membership_days} onChange={(e) => setForm({ ...form, min_membership_days: e.target.value })} />
+              <Input
+                type="number"
+                min="0"
+                value={form.min_membership_days}
+                onChange={(e) => setForm({ ...form, min_membership_days: e.target.value })}
+              />
             </div>
             <div>
               <Label>Interest rate (%)</Label>
-              <Input type="number" step="0.1" min="0" value={form.interest_rate_percent} onChange={(e) => setForm({ ...form, interest_rate_percent: e.target.value })} />
+              <Input
+                type="number"
+                step="0.1"
+                min="0"
+                value={form.interest_rate_percent}
+                onChange={(e) => setForm({ ...form, interest_rate_percent: e.target.value })}
+              />
             </div>
             <div>
               <Label>Max repayment (months)</Label>
-              <Input type="number" min="1" value={form.max_repayment_months} onChange={(e) => setForm({ ...form, max_repayment_months: e.target.value })} />
+              <Input
+                type="number"
+                min="1"
+                value={form.max_repayment_months}
+                onChange={(e) => setForm({ ...form, max_repayment_months: e.target.value })}
+              />
             </div>
             <div className="flex items-end gap-2">
-              <Switch checked={form.active} onCheckedChange={(v) => setForm({ ...form, active: v })} />
+              <Switch
+                checked={form.active}
+                onCheckedChange={(v) => setForm({ ...form, active: v })}
+              />
               <Label className="mb-1">Rules active</Label>
             </div>
           </div>
-          <Button type="submit" disabled={save.isPending}>{save.isPending ? "Saving…" : `Save ${loanType} loan rules`}</Button>
+          <Button type="submit" disabled={save.isPending}>
+            {save.isPending ? "Saving…" : `Save ${loanType} loan rules`}
+          </Button>
         </form>
       </Card>
       <p className="text-xs text-muted-foreground">
-        Loans are auto-flagged as eligible when they meet all criteria for their type; the board still reviews every forwarded request.
+        Loans are auto-flagged as eligible when they meet all criteria for their type; the board
+        still reviews every forwarded request.
       </p>
     </div>
   );

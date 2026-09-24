@@ -4,15 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PaymentInfoCard } from "@/components/PaymentInfoCard";
-import {
-  ArrowDownRight,
-  ArrowUpRight,
-  Users,
-  Wallet,
-  AlertTriangle,
-  ShieldAlert,
-  ArrowRight,
-} from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Users, Wallet, ShieldAlert, ArrowRight } from "lucide-react";
 import {
   BarChart,
   Bar,

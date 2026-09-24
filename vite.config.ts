@@ -7,6 +7,24 @@
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
 export default defineConfig({
+  vite: {
+    plugins: [
+      {
+        name: "filter-dependency-client-directives",
+        onLog(level, log) {
+          // The third-party React "use client" annotations are inert here.
+          // Keep all other build diagnostics visible.
+          if (
+            level === "warn" &&
+            log.code === "MODULE_LEVEL_DIRECTIVE" &&
+            log.id?.includes("node_modules/") &&
+            log.message?.includes('"use client"')
+          )
+            return false;
+        },
+      },
+    ],
+  },
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
     // nitro/vite builds from this

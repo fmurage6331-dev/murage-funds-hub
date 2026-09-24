@@ -20,7 +20,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { ShieldCheck, Download, Trash2, MoreVertical, FileText } from "lucide-react";
+import { ShieldCheck, Download, Trash2, MoreVertical } from "lucide-react";
 import { toast } from "sonner";
 
 interface KdpaUserToolsProps {
