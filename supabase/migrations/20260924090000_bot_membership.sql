@@ -33,6 +33,9 @@ CREATE TABLE IF NOT EXISTS public.pending_registrations (
 );
 ALTER TABLE public.pending_registrations ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now();
 ALTER TABLE public.pending_registrations ENABLE ROW LEVEL SECURITY;
+-- An early migration revoked PUBLIC execute on has_role without re-granting
+-- authenticated. The admin-only policy below (and existing officer RLS) needs it.
+GRANT EXECUTE ON FUNCTION public.has_role(uuid, public.app_role) TO authenticated, service_role;
 -- Replace any pre-existing permissive policies: applicants' PII is admin-only.
 REVOKE ALL ON public.pending_registrations FROM anon, authenticated;
 GRANT SELECT ON public.pending_registrations TO authenticated;
