@@ -19,6 +19,7 @@ function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [consentGiven, setConsentGiven] = useState(false);
 
   useEffect(() => {
@@ -44,6 +45,15 @@ function AuthPage() {
         "You must accept the Kenya Data Protection Act (KDPA) consent notice to register.",
       );
     }
+    const digits = phoneNumber.replace(/[\s()+-]/g, "");
+    const normalized = digits.startsWith("254")
+      ? digits
+      : digits.startsWith("0")
+        ? `254${digits.slice(1)}`
+        : `254${digits}`;
+    if (!/^254[17][0-9]{8}$/.test(normalized)) {
+      return toast.error("Enter a valid Kenyan phone number (e.g. +254712345678).");
+    }
     setLoading(true);
     const { error } = await supabase.auth.signUp({
       email,
@@ -52,6 +62,7 @@ function AuthPage() {
         emailRedirectTo: `${window.location.origin}/my-contributions`,
         data: {
           full_name: fullName,
+          phone_number: normalized,
           consent_given: true,
           consent_version: "1.0",
         },
@@ -132,6 +143,23 @@ function AuthPage() {
                   />
                 </div>
                 <div className="space-y-1.5">
+                  <Label htmlFor="su-phone">Mobile number (WhatsApp or SMS)</Label>
+                  <Input
+                    id="su-phone"
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    placeholder="+254712345678"
+                    required
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    An admin verifies your phone before approving web and bot access. Text JOIN to
+                    the bot to opt into messages.
+                  </p>
+                </div>
+                <div className="space-y-1.5">
                   <Label htmlFor="su-password">Password</Label>
                   <Input
                     id="su-password"
@@ -165,7 +193,7 @@ function AuthPage() {
                   {loading ? "Creating..." : "Create account"}
                 </Button>
                 <p className="text-xs text-muted-foreground">
-                  The first account created becomes the administrator.
+                  An administrator reviews your registration before you can access the web app.
                 </p>
               </form>
             </TabsContent>

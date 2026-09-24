@@ -16,7 +16,13 @@ import { Send } from "lucide-react";
 import { toast } from "sonner";
 import { useRoles } from "@/hooks/use-roles";
 import { RepaymentScheduleDialog } from "@/components/loans/RepaymentScheduleDialog";
-import { notifyLoanStatusChange } from "@/lib/notifications";
+import { notifyLoanStatusChange, sendWhatsAppSMS } from "@/lib/notifications";
+import type { Database } from "@/integrations/supabase/types";
+
+type ReviewLoan = Database["public"]["Tables"]["loans"]["Row"] & {
+  profiles: { full_name: string | null; email: string | null } | null;
+  loan_repayments: Database["public"]["Tables"]["loan_repayments"]["Row"][];
+};
 
 export const Route = createFileRoute("/_authenticated/loans-review")({
   component: Page,
@@ -45,17 +51,23 @@ function Page() {
   const { data: loans = [], isLoading } = useQuery({
     queryKey: ["loans", "review"],
     enabled: r.canForwardLoans || r.isBoard || r.isAdmin,
-    queryFn: async () =>
-      (
-        await supabase
+    queryFn: async () => {
+      try {
+        const { data, error } = await supabase
           .from("loans")
           .select("*, profiles:member_id(full_name, email), loan_repayments(*)")
-          .order("created_at", { ascending: false })
-      ).data ?? [],
+          .order("created_at", { ascending: false });
+        if (error) throw error;
+        return (data ?? []) as ReviewLoan[];
+      } catch (error) {
+        console.error("[loans] Could not load reviews:", error);
+        throw error;
+      }
+    },
   });
 
   const forward = useMutation({
-    mutationFn: async ({ id, loan }: { id: string; loan?: any }) => {
+    mutationFn: async ({ id, loan }: { id: string; loan: ReviewLoan }) => {
       const { error } = await supabase
         .from("loans")
         .update({
@@ -69,12 +81,12 @@ function Page() {
       if (loan?.profiles?.email) {
         notifyLoanStatusChange({
           memberEmail: loan.profiles.email,
-          memberName: loan.profiles.full_name,
+          memberName: loan.profiles.full_name ?? undefined,
           loanAmount: Number(loan.amount),
           loanType: loan.loan_type,
           status: "forwarded",
           repaymentMonths: loan.repayment_months,
-        }).catch((e) => console.warn("Failed sending loan status notification", e));
+        }).catch((error: unknown) => console.error("[loans] Email delivery failed:", error));
       }
     },
     onSuccess: () => {
@@ -85,33 +97,40 @@ function Page() {
   });
 
   const reject = useMutation({
-    mutationFn: async ({ id, loan }: { id: string; loan?: any }) => {
-      const reason = prompt("Rejection reason?") ?? "";
+    mutationFn: async ({ id, loan }: { id: string; loan: ReviewLoan }) => {
+      const reason = (prompt("Rejection reason?") ?? "").trim();
       if (!reason) throw new Error("Reason required");
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("loans")
         .update({
           status: "rejected",
           decision_at: new Date().toISOString(),
           rejection_reason: reason,
         })
-        .eq("id", id);
+        .eq("id", id)
+        .eq("status", "submitted")
+        .select("id")
+        .maybeSingle();
       if (error) throw error;
+      if (!data) throw new Error("This loan is no longer awaiting review.");
 
-      if (loan?.profiles?.email) {
-        notifyLoanStatusChange({
+      if (loan.profiles?.email) {
+        void notifyLoanStatusChange({
           memberEmail: loan.profiles.email,
-          memberName: loan.profiles.full_name,
+          memberName: loan.profiles.full_name ?? undefined,
           loanAmount: Number(loan.amount),
           loanType: loan.loan_type,
           status: "rejected",
           reason,
           repaymentMonths: loan.repayment_months,
-        }).catch((e) => console.warn("Failed sending loan status notification", e));
+        }).catch((error: unknown) => console.error("[loans] Email delivery failed:", error));
       }
+      return sendWhatsAppSMS({ type: "loan_rejected", recordId: id });
     },
-    onSuccess: () => {
+    onSuccess: (delivery) => {
       toast.success("Rejected");
+      if (!delivery.success)
+        toast.warning("Rejected, but WhatsApp/SMS delivery failed. Check the Edge logs.");
       qc.invalidateQueries({ queryKey: ["loans"] });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -161,7 +180,7 @@ function Page() {
               </TableRow>
             ) : (
               loans.map((l) => {
-                const p = (l as any).profiles;
+                const p = l.profiles;
                 return (
                   <TableRow key={l.id}>
                     <TableCell>
@@ -187,12 +206,12 @@ function Page() {
                         <Badge className={statusColor(l.status)}>{l.status}</Badge>
                         {l.status === "approved" &&
                           (() => {
-                            const reps = (l as any).loan_repayments || [];
+                            const reps = l.loan_repayments ?? [];
                             const overdueCount = reps.filter(
-                              (r: any) =>
-                                r.status === "overdue" ||
-                                (new Date(r.due_date) < new Date() &&
-                                  Number(r.amount_paid) < Number(r.amount_due)),
+                              (repayment) =>
+                                repayment.status === "overdue" ||
+                                (new Date(repayment.due_date) < new Date() &&
+                                  Number(repayment.amount_paid) < Number(repayment.amount_due)),
                             ).length;
                             return overdueCount > 0 ? (
                               <Badge
@@ -227,7 +246,7 @@ function Page() {
                         <RepaymentScheduleDialog
                           loan={l}
                           canRecordPayment={r.canConfirmContribs || r.isAdmin}
-                          memberEmail={p?.email}
+                          memberEmail={p?.email ?? undefined}
                         />
                       )}
                     </TableCell>

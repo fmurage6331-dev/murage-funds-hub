@@ -4,8 +4,6 @@
 // 2. Contribution status changes (pending -> confirmed / rejected)
 // 3. New meeting scheduled
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -15,10 +13,10 @@ interface EmailNotificationPayload {
   to: string | string[];
   subject: string;
   template: "loan_status_changed" | "contribution_reviewed" | "meeting_scheduled";
-  data: Record<string, any>;
+  data: Record<string, unknown>;
 }
 
-function generateHtmlEmail(template: string, data: Record<string, any>): string {
+function generateHtmlEmail(template: string, data: Record<string, unknown>): string {
   const brandColor = "#0f392b"; // deep primary green
   const accentColor = "#c59a3f"; // gold
   const baseStyles = `
@@ -38,7 +36,8 @@ function generateHtmlEmail(template: string, data: Record<string, any>): string 
   switch (template) {
     case "loan_status_changed": {
       const { memberName, loanAmount, loanType, status, reason, repaymentMonths } = data;
-      const statusBadgeColor = status === "approved" ? "#16a34a" : status === "rejected" ? "#dc2626" : "#c59a3f";
+      const statusBadgeColor =
+        status === "approved" ? "#16a34a" : status === "rejected" ? "#dc2626" : "#c59a3f";
 
       contentHtml = `
         <h2 style="color: ${brandColor}; margin-top: 0;">Loan Application Update</h2>
@@ -66,7 +65,7 @@ function generateHtmlEmail(template: string, data: Record<string, any>): string 
         <div style="background-color: #f9fafb; border-left: 4px solid ${statusColor}; padding: 16px; margin: 20px 0; border-radius: 4px;">
           <p style="margin: 0 0 8px 0;"><strong>Amount:</strong> KES ${Number(amount || 0).toLocaleString()}</p>
           <p style="margin: 0 0 8px 0;"><strong>Status:</strong> <span style="color: ${statusColor}; font-weight: bold; text-transform: uppercase;">${status}</span></p>
-          <p style="margin: 0 0 8px 0;"><strong>Method:</strong> ${(method || "M-Pesa").toUpperCase()}</p>
+          <p style="margin: 0 0 8px 0;"><strong>Method:</strong> ${String(method || "M-Pesa").toUpperCase()}</p>
           ${reference ? `<p style="margin: 0 0 8px 0;"><strong>Reference:</strong> ${reference}</p>` : ""}
           ${notes ? `<p style="margin: 0; color: #6b7280;"><strong>Treasury Note:</strong> ${notes}</p>` : ""}
         </div>
@@ -77,7 +76,7 @@ function generateHtmlEmail(template: string, data: Record<string, any>): string 
 
     case "meeting_scheduled": {
       const { title, scheduledFor, location, agenda } = data;
-      const formattedDate = new Date(scheduledFor).toLocaleString("en-KE", {
+      const formattedDate = new Date(String(scheduledFor)).toLocaleString("en-KE", {
         dateStyle: "full",
         timeStyle: "short",
       });
@@ -90,7 +89,7 @@ function generateHtmlEmail(template: string, data: Record<string, any>): string 
           <h3 style="margin: 0 0 10px 0; color: ${brandColor};">${title}</h3>
           <p style="margin: 0 0 8px 0;"><strong>Date & Time:</strong> ${formattedDate}</p>
           <p style="margin: 0 0 8px 0;"><strong>Location / Venue:</strong> ${location || "TBA / Virtual"}</p>
-          ${agenda ? `<p style="margin: 0; color: #374151;"><strong>Agenda:</strong><br/>${agenda.replace(/\n/g, "<br/>")}</p>` : ""}
+          ${agenda ? `<p style="margin: 0; color: #374151;"><strong>Agenda:</strong><br/>${String(agenda).replace(/\n/g, "<br/>")}</p>` : ""}
         </div>
         <p>Your attendance and prompt participation are highly appreciated.</p>
       `;
@@ -128,7 +127,7 @@ function generateHtmlEmail(template: string, data: Record<string, any>): string 
   `;
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -140,7 +139,7 @@ serve(async (req) => {
     if (!to || !subject || !template) {
       return new Response(
         JSON.stringify({ error: "Missing required fields: to, subject, template" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
@@ -154,7 +153,7 @@ serve(async (req) => {
       const res = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${resendApiKey}`,
+          Authorization: `Bearer ${resendApiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -176,13 +175,16 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({ success: true, message: "Notification processed", result: providerResult }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[send-email error]", error);
     return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ error: error instanceof Error ? error.message : "Email failed" }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   }
 });
