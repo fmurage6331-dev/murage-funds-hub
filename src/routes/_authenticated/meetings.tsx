@@ -18,7 +18,7 @@ import { Card } from "@/components/ui/card";
 import { Plus, CalendarDays, MapPin, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { useRoles } from "@/hooks/use-roles";
-import { notifyNewMeeting } from "@/lib/notifications";
+import { notifyNewMeeting, sendWhatsAppSMS } from "@/lib/notifications";
 
 export const Route = createFileRoute("/_authenticated/meetings")({
   component: Page,
@@ -46,24 +46,31 @@ function Page() {
   const create = useMutation({
     mutationFn: async () => {
       const scheduledIso = new Date(form.scheduled_for).toISOString();
-      const { error } = await supabase.from("meetings").insert({
-        title: form.title,
-        scheduled_for: scheduledIso,
-        location: form.location || null,
-        agenda: form.agenda || null,
-        created_by: user.id,
-      });
+      const { data, error } = await supabase
+        .from("meetings")
+        .insert({
+          title: form.title,
+          scheduled_for: scheduledIso,
+          location: form.location || null,
+          agenda: form.agenda || null,
+          created_by: user.id,
+        })
+        .select("id")
+        .single();
       if (error) throw error;
 
-      notifyNewMeeting({
+      void notifyNewMeeting({
         title: form.title,
         scheduledFor: scheduledIso,
         location: form.location || undefined,
         agenda: form.agenda || undefined,
-      }).catch((e) => console.warn("Failed broadcasting meeting notification", e));
+      }).catch((caught: unknown) => console.error("[meetings] Email broadcast failed:", caught));
+      return sendWhatsAppSMS({ type: "meeting_scheduled", recordId: data.id });
     },
-    onSuccess: () => {
+    onSuccess: (delivery) => {
       toast.success("Meeting scheduled. All members can see it.");
+      if (!delivery.success)
+        toast.warning("Some WhatsApp/SMS notices failed. Check the Edge logs.");
       setOpen(false);
       setForm({ title: "", scheduled_for: "", location: "", agenda: "" });
       qc.invalidateQueries({ queryKey: ["meetings"] });
@@ -166,11 +173,7 @@ function Page() {
         <Card className="p-8 text-center text-muted-foreground">No meetings scheduled.</Card>
       ) : (
         meetings.map((m) => {
-          const minutes = ((m as any).meeting_minutes ?? []) as {
-            id: string;
-            content: string;
-            created_at: string;
-          }[];
+          const minutes = m.meeting_minutes ?? [];
           const upcoming = new Date(m.scheduled_for) > new Date();
           return (
             <Card key={m.id} className="p-5">

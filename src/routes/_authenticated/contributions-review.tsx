@@ -15,7 +15,12 @@ import { Button } from "@/components/ui/button";
 import { Check, X } from "lucide-react";
 import { toast } from "sonner";
 import { useRoles } from "@/hooks/use-roles";
-import { notifyContributionReview } from "@/lib/notifications";
+import { notifyContributionReview, sendWhatsAppSMS } from "@/lib/notifications";
+import type { Database } from "@/integrations/supabase/types";
+
+type ReviewRow = Database["public"]["Tables"]["contributions"]["Row"] & {
+  profiles: { full_name: string | null; email: string | null } | null;
+};
 
 export const Route = createFileRoute("/_authenticated/contributions-review")({
   component: Page,
@@ -37,11 +42,17 @@ function Page() {
     queryKey: ["contribs", "all"],
     enabled: r.canConfirmContribs,
     queryFn: async () => {
-      const { data } = await supabase
-        .from("contributions")
-        .select("*, profiles:member_id(full_name, email)")
-        .order("created_at", { ascending: false });
-      return data ?? [];
+      try {
+        const { data, error } = await supabase
+          .from("contributions")
+          .select("*, profiles:member_id(full_name, email)")
+          .order("created_at", { ascending: false });
+        if (error) throw error;
+        return (data ?? []) as ReviewRow[];
+      } catch (error) {
+        console.error("[contributions] Could not load reviews:", error);
+        throw error;
+      }
     },
   });
 
@@ -53,31 +64,40 @@ function Page() {
     }: {
       id: string;
       status: "confirmed" | "rejected";
-      row?: any;
+      row: ReviewRow;
     }) => {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("contributions")
         .update({
           status,
           confirmed_by: user.id,
           confirmed_at: new Date().toISOString(),
         })
-        .eq("id", id);
+        .eq("id", id)
+        .eq("status", "pending")
+        .select("id")
+        .maybeSingle();
       if (error) throw error;
+      if (!data) throw new Error("This contribution was already reviewed.");
 
-      if (row?.profiles?.email) {
-        notifyContributionReview({
+      if (row.profiles?.email) {
+        void notifyContributionReview({
           memberEmail: row.profiles.email,
-          memberName: row.profiles.full_name,
+          memberName: row.profiles.full_name ?? undefined,
           amount: Number(row.amount),
           status,
           method: row.method,
-          reference: row.reference,
-        }).catch((e) => console.warn("Failed sending notification", e));
+          reference: row.reference ?? row.mpesa_transaction_id ?? undefined,
+        }).catch((e: unknown) => console.error("[contributions] Email delivery failed:", e));
       }
+      return status === "confirmed"
+        ? sendWhatsAppSMS({ type: "contribution_confirmed", recordId: id })
+        : null;
     },
-    onSuccess: () => {
+    onSuccess: (delivery) => {
       toast.success("Updated");
+      if (delivery && !delivery.success)
+        toast.warning("Confirmed, but WhatsApp/SMS delivery failed. Check the Edge logs.");
       qc.invalidateQueries({ queryKey: ["contribs"] });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -127,7 +147,7 @@ function Page() {
               </TableRow>
             ) : (
               rows.map((row) => {
-                const p = (row as any).profiles;
+                const p = row.profiles;
                 return (
                   <TableRow key={row.id}>
                     <TableCell>

@@ -1,5 +1,49 @@
 import { supabase } from "@/integrations/supabase/client";
 
+type NotificationEvent =
+  "contribution_confirmed" | "loan_approved" | "loan_rejected" | "meeting_scheduled";
+type DeliveryResult = {
+  success: boolean;
+  sent?: number;
+  failed?: number;
+  skipped?: number;
+  error?: string;
+};
+
+/**
+ * Requests an officer-authorized event notification. The Edge Function loads
+ * the actual recipient phone, prefers_sms/opt-in and message from the database
+ * before calling AT. Never put the AT API key (or arbitrary outbound text) in
+ * browser code; otherwise any signed-in member could send messages as us.
+ */
+export async function sendWhatsAppSMS({
+  type,
+  recordId,
+}: {
+  type: NotificationEvent;
+  recordId: string;
+}): Promise<DeliveryResult> {
+  try {
+    const { data, error } = await supabase.functions.invoke<DeliveryResult>("notify-event", {
+      body: { type, recordId },
+    });
+    if (error) throw error;
+    if (!data) throw new Error("No delivery response");
+    if (!data.success)
+      console.error(
+        "[Notification Service] AT delivery was not accepted:",
+        data.error ?? data.failed,
+      );
+    return data;
+  } catch (error) {
+    console.error("[Notification Service] WhatsApp/SMS event failed:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Notification failed",
+    };
+  }
+}
+
 export async function sendNotificationEmail(params: {
   to: string | string[];
   subject: string;
