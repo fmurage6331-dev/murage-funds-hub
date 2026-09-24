@@ -1,1 +1,9 @@
-project_id = "esucatyqgyouvmitrkrm"
+project_id = "cbfciiehhpkpdtxrltrc"
+
+# Africa's Talking callbacks carry a shared secret in the URL instead of a
+# Supabase JWT. The handler verifies it BEFORE performing any database action.
+[functions.whatsapp-bot]
+verify_jwt = false
+
+# review-registration and notify-event retain the default JWT verification;
+# both additionally check the caller's current approved officer role.

@@ -53,6 +53,44 @@ export type Database = {
         }
         Relationships: []
       }
+      bot_notification_deliveries: {
+        Row: {
+          id: string
+          event_type: string
+          record_id: string
+          profile_id: string
+          status: string
+          claimed_at: string
+          sent_at: string | null
+        }
+        Insert: {
+          id?: string
+          event_type: string
+          record_id: string
+          profile_id: string
+          status?: string
+          claimed_at?: string
+          sent_at?: string | null
+        }
+        Update: {
+          id?: string
+          event_type?: string
+          record_id?: string
+          profile_id?: string
+          status?: string
+          claimed_at?: string
+          sent_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bot_notification_deliveries_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contributions: {
         Row: {
           amount: number
@@ -64,6 +102,10 @@ export type Database = {
           id: string
           member_id: string
           method: string
+          mpesa_transaction_id: string | null
+          mpesa_sender_phone: string | null
+          mpesa_sender_name: string | null
+          paybill_number: string | null
           notes: string | null
           reference: string | null
           status: string
@@ -79,6 +121,10 @@ export type Database = {
           id?: string
           member_id: string
           method?: string
+          mpesa_transaction_id?: string | null
+          mpesa_sender_phone?: string | null
+          mpesa_sender_name?: string | null
+          paybill_number?: string | null
           notes?: string | null
           reference?: string | null
           status?: string
@@ -94,6 +140,10 @@ export type Database = {
           id?: string
           member_id?: string
           method?: string
+          mpesa_transaction_id?: string | null
+          mpesa_sender_phone?: string | null
+          mpesa_sender_name?: string | null
+          paybill_number?: string | null
           notes?: string | null
           reference?: string | null
           status?: string
@@ -425,6 +475,98 @@ export type Database = {
         }
         Relationships: []
       }
+      pending_registrations: {
+        Row: {
+          id: string
+          phone_number: string
+          full_name: string
+          email: string | null
+          requested_role: Database["public"]["Enums"]["app_role"]
+          registration_channel: string
+          status: string
+          admin_notes: string | null
+          approved_by: string | null
+          approved_at: string | null
+          invite_sent: boolean
+          invite_sent_at: string | null
+          profile_id: string | null
+          consent_given: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          phone_number: string
+          full_name: string
+          email?: string | null
+          requested_role: Database["public"]["Enums"]["app_role"]
+          registration_channel: string
+          status?: string
+          admin_notes?: string | null
+          approved_by?: string | null
+          approved_at?: string | null
+          invite_sent?: boolean
+          invite_sent_at?: string | null
+          profile_id?: string | null
+          consent_given?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          phone_number?: string
+          full_name?: string
+          email?: string | null
+          requested_role?: Database["public"]["Enums"]["app_role"]
+          registration_channel?: string
+          status?: string
+          admin_notes?: string | null
+          approved_by?: string | null
+          approved_at?: string | null
+          invite_sent?: boolean
+          invite_sent_at?: string | null
+          profile_id?: string | null
+          consent_given?: boolean
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pending_registrations_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      whatsapp_sessions: {
+        Row: {
+          id: string
+          phone_number: string
+          channel: string
+          step: string
+          collected_data: Json
+          last_message_at: string
+          expires_at: string
+        }
+        Insert: {
+          id?: string
+          phone_number: string
+          channel: string
+          step: string
+          collected_data?: Json
+          last_message_at?: string
+          expires_at?: string
+        }
+        Update: {
+          id?: string
+          phone_number?: string
+          channel?: string
+          step?: string
+          collected_data?: Json
+          last_message_at?: string
+          expires_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           anonymized_at: string | null
@@ -437,6 +579,12 @@ export type Database = {
           full_name: string | null
           id: string
           is_anonymized: boolean
+          phone_number: string | null
+          whatsapp_verified: boolean
+          whatsapp_opt_in: boolean
+          whatsapp_opt_in_at: string | null
+          prefers_sms: boolean
+          phone_only_member: boolean
           status: string
           updated_at: string
         }
@@ -451,6 +599,12 @@ export type Database = {
           full_name?: string | null
           id: string
           is_anonymized?: boolean
+          phone_number?: string | null
+          whatsapp_verified?: boolean
+          whatsapp_opt_in?: boolean
+          whatsapp_opt_in_at?: string | null
+          prefers_sms?: boolean
+          phone_only_member?: boolean
           status?: string
           updated_at?: string
         }
@@ -465,6 +619,12 @@ export type Database = {
           full_name?: string | null
           id?: string
           is_anonymized?: boolean
+          phone_number?: string | null
+          whatsapp_verified?: boolean
+          whatsapp_opt_in?: boolean
+          whatsapp_opt_in_at?: string | null
+          prefers_sms?: boolean
+          phone_only_member?: boolean
           status?: string
           updated_at?: string
         }
@@ -542,7 +702,15 @@ export type Database = {
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "user_roles_user_id_profiles_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
@@ -570,6 +738,14 @@ export type Database = {
       }
     }
     Functions: {
+      bot_claim_notification: {
+        Args: { _event_type: string; _record_id: string; _profile_id: string }
+        Returns: boolean
+      }
+      bot_member_balance: {
+        Args: { _member_id: string }
+        Returns: { total: number; last_amount: number | null; last_date: string | null }[]
+      }
       board_majority_count: { Args: never; Returns: number }
       has_any_role: {
         Args: {
