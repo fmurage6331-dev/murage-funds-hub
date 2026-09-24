@@ -4,3 +4,9 @@ project_id = "cbfciiehhpkpdtxrltrc"
 # whatsapp-bot requires AFRICASTALKING_WEBHOOK_SECRET in the callback URL instead.
 [functions.whatsapp-bot]
 verify_jwt = false
+
+[functions.manage-registration]
+verify_jwt = true
+
+[functions.bot-notifications]
+verify_jwt = true

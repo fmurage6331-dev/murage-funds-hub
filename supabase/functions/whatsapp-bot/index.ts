@@ -1,4 +1,5 @@
 import { adminClient, dbResult } from "../_shared/db.ts";
+import { notifyContributionConfirmed } from "../_shared/notifications.ts";
 import {
   getMemberByPhone,
   isOfficer,
@@ -426,7 +427,7 @@ async function pendingContributions(phone: string): Promise<string> {
   return `📋 Pending Contributions (${count})\n──────────────────────────────────\n${lines || "None pending."}\n\nReply: CONFIRM {ref} to approve${count > rows.length ? "\nShowing first 10." : ""}`;
 }
 
-async function confirmContribution(phone: string, input: string, channel: Channel): Promise<string> {
+async function confirmContribution(phone: string, input: string): Promise<string> {
   if (!(await isOfficer(phone))) return "⛔ This command is for officers only.\nText HELP for available commands.";
   const parts = input.trim().split(/\s+/);
   if (parts.length !== 2 || !/^[A-Z0-9-]{5,30}$/i.test(parts[1])) return "Reply CONFIRM {mpesa_ref}, e.g. CONFIRM QWE123456.";
@@ -448,24 +449,13 @@ async function confirmContribution(phone: string, input: string, channel: Channe
     }).eq("id", contribution.id).eq("status", "pending").select("id").maybeSingle(),
   );
   if (!updated) return "That contribution has already been reviewed.";
-  const member = await dbResult(
-    "confirmed contribution member",
-    adminClient().from("profiles").select("*").eq("id", contribution.member_id).single(),
-  );
-  const total = await dbResult("new confirmed balance", adminClient().rpc("bot_confirmed_total", { _member_id: contribution.member_id }));
-  if (member?.phone_number && member.whatsapp_opt_in && !member.is_anonymized) {
-    try {
-      await sendMessage({
-        to: member.phone_number,
-        channel: member.prefers_sms ? "sms" : "whatsapp",
-        message: `✅ Contribution Confirmed!\n─────────────────────────\nAmount: KES ${formatKES(Number(contribution.amount))}\nM-Pesa Ref: ${ref}\nDate: ${formatKenyanDate(new Date().toISOString())}\nNew Total: KES ${formatKES(Number(total ?? 0))}\n\nThank you! 🙏\nMurage Foundation`,
-      });
-    } catch (error) {
-      console.error("[whatsapp-bot] member confirmation delivery failed", error);
-      return "Contribution confirmed, but the member message could not be delivered. Please contact them directly.";
-    }
+  try {
+    const sent = await notifyContributionConfirmed(contribution.id);
+    return `✅ Confirmed ${ref} for KES ${formatKES(Number(contribution.amount))}. ${sent ? "Member notified." : "Member has not opted in to notifications."} Text PENDING for more.`;
+  } catch (error) {
+    console.error("[whatsapp-bot] member confirmation delivery failed", error);
+    return "Contribution confirmed, but the member message could not be delivered. Please contact them directly.";
   }
-  return `✅ Confirmed ${ref} for KES ${formatKES(Number(contribution.amount))}. Member notified where opted in. Text PENDING for more.`;
 }
 
 async function stop(phone: string, session: Session | null): Promise<string> {
@@ -493,7 +483,7 @@ async function handleMessage(phone: string, text: string, channel: Channel): Pro
     case "DEPOSIT": return deposit(phone, input, channel);
     case "SCHEDULE": return schedule(phone);
     case "PENDING": return pendingContributions(phone);
-    case "CONFIRM": return confirmContribution(phone, input, channel);
+    case "CONFIRM": return confirmContribution(phone, input);
     case "HELP": return HELP;
     default: return "❓ Command not recognized.\n\nText HELP to see all commands.\n\nMurage Foundation Bot 🌟";
   }

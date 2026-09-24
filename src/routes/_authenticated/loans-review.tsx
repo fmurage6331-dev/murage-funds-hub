@@ -17,6 +17,11 @@ import { toast } from "sonner";
 import { useRoles } from "@/hooks/use-roles";
 import { RepaymentScheduleDialog } from "@/components/loans/RepaymentScheduleDialog";
 import { notifyLoanStatusChange } from "@/lib/notifications";
+import type { Tables } from "@/integrations/supabase/types";
+
+type LoanWithMember = Tables<"loans"> & {
+  profiles: { full_name: string | null; email: string | null } | null;
+};
 
 export const Route = createFileRoute("/_authenticated/loans-review")({
   component: Page,
@@ -55,7 +60,7 @@ function Page() {
   });
 
   const forward = useMutation({
-    mutationFn: async ({ id, loan }: { id: string; loan?: any }) => {
+    mutationFn: async ({ id, loan }: { id: string; loan: LoanWithMember }) => {
       const { error } = await supabase
         .from("loans")
         .update({
@@ -69,12 +74,12 @@ function Page() {
       if (loan?.profiles?.email) {
         notifyLoanStatusChange({
           memberEmail: loan.profiles.email,
-          memberName: loan.profiles.full_name,
+          memberName: loan.profiles.full_name ?? undefined,
           loanAmount: Number(loan.amount),
           loanType: loan.loan_type,
           status: "forwarded",
           repaymentMonths: loan.repayment_months,
-        }).catch((e) => console.warn("Failed sending loan status notification", e));
+        }).catch((e) => console.error("Failed sending loan status notification", e));
       }
     },
     onSuccess: () => {
@@ -85,30 +90,33 @@ function Page() {
   });
 
   const reject = useMutation({
-    mutationFn: async ({ id, loan }: { id: string; loan?: any }) => {
+    mutationFn: async ({ id, loan }: { id: string; loan: LoanWithMember }) => {
       const reason = prompt("Rejection reason?") ?? "";
       if (!reason) throw new Error("Reason required");
-      const { error } = await supabase
+      const { data: updated, error } = await supabase
         .from("loans")
         .update({
           status: "rejected",
           decision_at: new Date().toISOString(),
           rejection_reason: reason,
         })
-        .eq("id", id);
+        .eq("id", id)
+        .eq("status", "submitted")
+        .select("id")
+        .maybeSingle();
       if (error) throw error;
+      if (!updated) throw new Error("This loan has already been reviewed.");
 
-      if (loan?.profiles?.email) {
-        notifyLoanStatusChange({
-          memberEmail: loan.profiles.email,
-          memberName: loan.profiles.full_name,
-          loanAmount: Number(loan.amount),
-          loanType: loan.loan_type,
-          status: "rejected",
-          reason,
-          repaymentMonths: loan.repayment_months,
-        }).catch((e) => console.warn("Failed sending loan status notification", e));
-      }
+      void notifyLoanStatusChange({
+        loanId: id,
+        memberEmail: loan.profiles?.email,
+        memberName: loan.profiles?.full_name ?? undefined,
+        loanAmount: Number(loan.amount),
+        loanType: loan.loan_type,
+        status: "rejected",
+        reason,
+        repaymentMonths: loan.repayment_months,
+      }).catch((notificationError: unknown) => console.error("Failed sending loan status notification", notificationError));
     },
     onSuccess: () => {
       toast.success("Rejected");
@@ -161,7 +169,7 @@ function Page() {
               </TableRow>
             ) : (
               loans.map((l) => {
-                const p = (l as any).profiles;
+                const p = l.profiles;
                 return (
                   <TableRow key={l.id}>
                     <TableCell>
@@ -227,7 +235,7 @@ function Page() {
                         <RepaymentScheduleDialog
                           loan={l}
                           canRecordPayment={r.canConfirmContribs || r.isAdmin}
-                          memberEmail={p?.email}
+                          memberEmail={p?.email ?? undefined}
                         />
                       )}
                     </TableCell>

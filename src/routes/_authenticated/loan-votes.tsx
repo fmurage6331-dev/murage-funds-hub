@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { useRoles } from "@/hooks/use-roles";
+import { notifyLoanStatusChange } from "@/lib/notifications";
 
 export const Route = createFileRoute("/_authenticated/loan-votes")({
   component: Page,
@@ -39,7 +40,31 @@ function Page() {
       });
       if (error) throw error;
     },
-    onSuccess: () => { toast.success("Vote recorded"); qc.invalidateQueries({ queryKey: ["board-loans"] }); },
+    onSuccess: (_result, variables) => {
+      toast.success("Vote recorded");
+      void qc.invalidateQueries({ queryKey: ["board-loans"] });
+      void qc.invalidateQueries({ queryKey: ["loans"] });
+      // Majority voting updates loans in a DB trigger, not in loans-review.
+      // Read its committed status so both approval and board rejection notify
+      // phone-only members, too. The Edge function deduplicates races.
+      void (async () => {
+        const { data: decided, error } = await supabase.from("loans")
+          .select("id,amount,loan_type,status,rejection_reason,repayment_months,profiles:member_id(email,full_name)")
+          .eq("id", variables.loan_id).single();
+        if (error) throw error;
+        if (decided.status !== "approved" && decided.status !== "rejected") return;
+        await notifyLoanStatusChange({
+          loanId: decided.id,
+          memberEmail: decided.profiles?.email,
+          memberName: decided.profiles?.full_name ?? undefined,
+          loanAmount: Number(decided.amount),
+          loanType: decided.loan_type,
+          status: decided.status,
+          reason: decided.rejection_reason ?? undefined,
+          repaymentMonths: decided.repayment_months,
+        });
+      })().catch((notificationError: unknown) => console.error("Failed sending loan decision notification", notificationError));
+    },
     onError: (e: Error) => toast.error(e.message),
   });
 

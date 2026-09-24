@@ -16,6 +16,11 @@ import { Check, X } from "lucide-react";
 import { toast } from "sonner";
 import { useRoles } from "@/hooks/use-roles";
 import { notifyContributionReview } from "@/lib/notifications";
+import type { Tables } from "@/integrations/supabase/types";
+
+type ContributionWithMember = Tables<"contributions"> & {
+  profiles: { full_name: string | null; email: string | null } | null;
+};
 
 export const Route = createFileRoute("/_authenticated/contributions-review")({
   component: Page,
@@ -53,28 +58,31 @@ function Page() {
     }: {
       id: string;
       status: "confirmed" | "rejected";
-      row?: any;
+      row: ContributionWithMember;
     }) => {
-      const { error } = await supabase
+      const { data: updated, error } = await supabase
         .from("contributions")
         .update({
           status,
           confirmed_by: user.id,
           confirmed_at: new Date().toISOString(),
         })
-        .eq("id", id);
+        .eq("id", id)
+        .eq("status", "pending")
+        .select("id")
+        .maybeSingle();
       if (error) throw error;
+      if (!updated) throw new Error("This contribution has already been reviewed.");
 
-      if (row?.profiles?.email) {
-        notifyContributionReview({
-          memberEmail: row.profiles.email,
-          memberName: row.profiles.full_name,
-          amount: Number(row.amount),
-          status,
-          method: row.method,
-          reference: row.reference,
-        }).catch((e) => console.warn("Failed sending notification", e));
-      }
+      void notifyContributionReview({
+        contributionId: id,
+        memberEmail: row.profiles?.email,
+        memberName: row.profiles?.full_name ?? undefined,
+        amount: Number(row.amount),
+        status,
+        method: row.method,
+        reference: row.mpesa_transaction_id ?? row.reference ?? undefined,
+      }).catch((notificationError: unknown) => console.error("Failed sending contribution notification", notificationError));
     },
     onSuccess: () => {
       toast.success("Updated");
@@ -127,7 +135,7 @@ function Page() {
               </TableRow>
             ) : (
               rows.map((row) => {
-                const p = (row as any).profiles;
+                const p = row.profiles;
                 return (
                   <TableRow key={row.id}>
                     <TableCell>
@@ -159,6 +167,8 @@ function Page() {
                           <Button
                             size="icon"
                             variant="ghost"
+                            disabled={setStatus.isPending}
+                            aria-label={`Confirm ${p?.full_name ?? "member"} contribution`}
                             onClick={() =>
                               setStatus.mutate({ id: row.id, status: "confirmed", row })
                             }
@@ -168,6 +178,8 @@ function Page() {
                           <Button
                             size="icon"
                             variant="ghost"
+                            disabled={setStatus.isPending}
+                            aria-label={`Reject ${p?.full_name ?? "member"} contribution`}
                             onClick={() =>
                               setStatus.mutate({ id: row.id, status: "rejected", row })
                             }

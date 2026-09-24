@@ -46,21 +46,22 @@ function Page() {
   const create = useMutation({
     mutationFn: async () => {
       const scheduledIso = new Date(form.scheduled_for).toISOString();
-      const { error } = await supabase.from("meetings").insert({
+      const { data: meeting, error } = await supabase.from("meetings").insert({
         title: form.title,
         scheduled_for: scheduledIso,
         location: form.location || null,
         agenda: form.agenda || null,
         created_by: user.id,
-      });
+      }).select("id").single();
       if (error) throw error;
 
-      notifyNewMeeting({
+      void notifyNewMeeting({
+        meetingId: meeting.id,
         title: form.title,
         scheduledFor: scheduledIso,
         location: form.location || undefined,
         agenda: form.agenda || undefined,
-      }).catch((e) => console.warn("Failed broadcasting meeting notification", e));
+      }).catch((notificationError: unknown) => console.error("Failed broadcasting meeting notification", notificationError));
     },
     onSuccess: () => {
       toast.success("Meeting scheduled. All members can see it.");
