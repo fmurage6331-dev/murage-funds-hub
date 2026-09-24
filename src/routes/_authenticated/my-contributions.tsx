@@ -84,20 +84,26 @@ function MyContributionsPage() {
 
   const create = useMutation({
     mutationFn: async () => {
+      const reference = form.reference.trim();
+      const mpesaRef = form.method === "mpesa" ? reference.toUpperCase() : null;
+      if (mpesaRef !== null && !/^[A-Z0-9]{6,20}$/.test(mpesaRef)) {
+        throw new Error("Enter a valid M-Pesa code (6–20 letters or digits).");
+      }
       const { error } = await supabase.from("contributions").insert({
         member_id: user.id,
         amount: Number(form.amount),
         contributed_on: form.contributed_on,
         method: form.method,
-        reference: form.reference
-          ? form.method === "mpesa"
-            ? form.reference.toUpperCase()
-            : form.reference
-          : null,
-        mpesa_transaction_id: form.method === "mpesa" ? form.reference.toUpperCase() : null,
-        paybill_number: form.method === "mpesa" ? FOUNDATION.paybill : null,
+        reference: (mpesaRef ?? reference) || null,
+        mpesa_transaction_id: mpesaRef,
+        paybill_number: mpesaRef ? FOUNDATION.paybill : null,
         notes: form.notes || null,
       });
+      if (error?.code === "23505" && mpesaRef) {
+        throw new Error(
+          "This M-Pesa reference has already been submitted. Ask the treasurer if you need help.",
+        );
+      }
       if (error) throw error;
     },
     onSuccess: () => {

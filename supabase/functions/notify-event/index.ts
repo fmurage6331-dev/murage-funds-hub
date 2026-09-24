@@ -170,19 +170,22 @@ Agenda: ${meeting.agenda?.slice(0, 300) || "To be announced"}
 
 Murage Foundation 🌟`;
   const total: DeliveryStats = { sent: 0, skipped: 0, failed: 0 };
-  // Supabase REST caps queries at 1,000 rows. Page through EVERY eligible
-  // profile; concurrency is bounded to avoid overwhelming AT.
-  for (let offset = 0; ; offset += 100) {
-    const { data: profiles, error: profileError } = await client
+  // Keyset pagination remains stable as members JOIN/STOP during a broadcast.
+  // Offset pagination can skip people when an earlier row opts out. Supabase
+  // REST caps results at 1,000 rows, so fetch batches of 100 by profile ID.
+  let lastId: string | null = null;
+  for (;;) {
+    let page = client
       .from("profiles")
       .select("*")
       .eq("status", "approved")
       .eq("whatsapp_opt_in", true)
       .eq("is_anonymized", false)
-      .not("phone_number", "is", null)
-      .order("id")
-      .range(offset, offset + 99);
+      .not("phone_number", "is", null);
+    if (lastId) page = page.gt("id", lastId);
+    const { data: profiles, error: profileError } = await page.order("id").limit(100);
     check(profileError, "Read meeting recipients");
+    if (profiles?.length) lastId = profiles[profiles.length - 1].id;
     for (let i = 0; i < (profiles?.length ?? 0); i += 10) {
       const results = await Promise.all(
         (profiles ?? []).slice(i, i + 10).map((profile) =>

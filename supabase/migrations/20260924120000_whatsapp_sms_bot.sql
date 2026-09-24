@@ -79,9 +79,15 @@ CREATE UNIQUE INDEX IF NOT EXISTS profiles_phone_number_unique
 UPDATE public.contributions
 SET mpesa_transaction_id = NULLIF(upper(btrim(mpesa_transaction_id)), '')
 WHERE mpesa_transaction_id IS NOT NULL;
+-- Existing web contributions stored an M-Pesa code in `reference` before this
+-- migration added `mpesa_transaction_id`. Include both sources in the unique
+-- key so a bot DEPOSIT cannot re-report a legacy payment as a new one.
 CREATE UNIQUE INDEX IF NOT EXISTS contributions_mpesa_ref_unique
-  ON public.contributions(upper(mpesa_transaction_id))
-  WHERE mpesa_transaction_id IS NOT NULL;
+  ON public.contributions (
+    upper(COALESCE(NULLIF(btrim(mpesa_transaction_id), ''),
+      CASE WHEN method = 'mpesa' THEN NULLIF(btrim(reference), '') END))
+  )
+  WHERE mpesa_transaction_id IS NOT NULL OR (method = 'mpesa' AND reference IS NOT NULL);
 CREATE INDEX IF NOT EXISTS contributions_member_confirmed
   ON public.contributions(member_id, created_at DESC) WHERE status = 'confirmed';
 
