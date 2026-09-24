@@ -116,7 +116,9 @@ function Page() {
         status: "rejected",
         reason,
         repaymentMonths: loan.repayment_months,
-      }).catch((notificationError: unknown) => console.error("Failed sending loan status notification", notificationError));
+      }).catch((notificationError: unknown) =>
+        console.error("Failed sending loan status notification", notificationError),
+      );
     },
     onSuccess: () => {
       toast.success("Rejected");
@@ -195,9 +197,9 @@ function Page() {
                         <Badge className={statusColor(l.status)}>{l.status}</Badge>
                         {l.status === "approved" &&
                           (() => {
-                            const reps = (l as any).loan_repayments || [];
+                            const reps = l.loan_repayments ?? [];
                             const overdueCount = reps.filter(
-                              (r: any) =>
+                              (r) =>
                                 r.status === "overdue" ||
                                 (new Date(r.due_date) < new Date() &&
                                   Number(r.amount_paid) < Number(r.amount_due)),

@@ -9,11 +9,13 @@ export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 export function normalizePhone(phone: string): string {
   if (!/^\+?[\d\s().-]+$/.test(phone.trim())) throw new Error("Invalid phone number");
   const digits = phone.replace(/\D/g, "");
-  const normalized = digits.startsWith("254")
-    ? digits
-    : digits.startsWith("0")
-      ? `254${digits.slice(1)}`
-      : `254${digits}`;
+  const normalized = digits.startsWith("00254")
+    ? digits.slice(2)
+    : digits.startsWith("254")
+      ? digits
+      : digits.startsWith("0")
+        ? `254${digits.slice(1)}`
+        : `254${digits}`;
   if (!/^254\d{9}$/.test(normalized)) throw new Error("Expected a Kenyan phone number");
   return normalized;
 }
@@ -68,7 +70,8 @@ export async function sendMessage({
       );
     } else {
       const waNumber = Deno.env.get("AFRICASTALKING_WHATSAPP_NUMBER");
-      if (!waNumber) throw new Error("AFRICASTALKING_WHATSAPP_NUMBER is required for live WhatsApp");
+      if (!waNumber)
+        throw new Error("AFRICASTALKING_WHATSAPP_NUMBER is required for live WhatsApp");
       response = await fetch("https://chat.africastalking.com/whatsapp/message/send", {
         method: "POST",
         headers: { apiKey: key, "Content-Type": "application/json" },
@@ -95,7 +98,9 @@ export async function sendMessage({
     } else if (result.status !== "SENT" && result.status !== "DELIVERED") {
       // Some AT versions return statusString rather than status.
       if (result.statusString !== "SENT" && result.statusString !== "DELIVERED") {
-        throw new Error(`Africa's Talking WhatsApp rejected (${String(result.statusString ?? result.status)})`);
+        throw new Error(
+          `Africa's Talking WhatsApp rejected (${String(result.statusString ?? result.status)})`,
+        );
       }
     }
   } catch (error) {

@@ -11,7 +11,10 @@ import {
 import { formatKenyanDate, formatKES, foundation, payment } from "../../../src/lib/foundation.ts";
 import type { Database, Json } from "../../../src/integrations/supabase/types.ts";
 
-declare const Deno: { env: { get(name: string): string | undefined }; serve(handler: (req: Request) => Promise<Response>): void };
+declare const Deno: {
+  env: { get(name: string): string | undefined };
+  serve(handler: (req: Request) => Promise<Response>): void;
+};
 
 type Session = Database["public"]["Tables"]["whatsapp_sessions"]["Row"];
 type RequestedRole = "member" | "board_member" | "secretary" | "assistant_secretary";
@@ -61,9 +64,10 @@ function sessionData(session: Session): SessionData {
   const role = value.role;
   return {
     fullName: typeof value.fullName === "string" ? value.fullName : undefined,
-    role: typeof role === "string" && Object.values(ROLES).includes(role as RequestedRole)
-      ? (role as RequestedRole)
-      : undefined,
+    role:
+      typeof role === "string" && Object.values(ROLES).includes(role as RequestedRole)
+        ? (role as RequestedRole)
+        : undefined,
     email: typeof value.email === "string" || value.email === null ? value.email : undefined,
     paused: value.paused === true,
   };
@@ -82,19 +86,32 @@ async function updateSession(session: Session, step: string, data: SessionData):
     "save JOIN step",
     adminClient()
       .from("whatsapp_sessions")
-      .update({ step, collected_data: dataToJson(data), last_message_at: new Date().toISOString(), expires_at: expiry() })
+      .update({
+        step,
+        collected_data: dataToJson(data),
+        last_message_at: new Date().toISOString(),
+        expires_at: expiry(),
+      })
       .eq("id", session.id),
   );
 }
 
 async function removeSession(session: Session): Promise<void> {
-  await dbResult("remove JOIN session", adminClient().from("whatsapp_sessions").delete().eq("id", session.id));
+  await dbResult(
+    "remove JOIN session",
+    adminClient().from("whatsapp_sessions").delete().eq("id", session.id),
+  );
 }
 
 async function loadSession(phone: string, channel: Channel): Promise<Session | null> {
   const session = await dbResult(
     "read JOIN session",
-    adminClient().from("whatsapp_sessions").select("*").eq("phone_number", phone).eq("channel", channel).maybeSingle(),
+    adminClient()
+      .from("whatsapp_sessions")
+      .select("*")
+      .eq("phone_number", phone)
+      .eq("channel", channel)
+      .maybeSingle(),
   );
   if (session && new Date(session.expires_at).getTime() <= Date.now()) {
     await removeSession(session);
@@ -105,10 +122,13 @@ async function loadSession(phone: string, channel: Channel): Promise<Session | n
 
 function sessionPrompt(session: Session): string {
   const data = sessionData(session);
-  if (session.step === "resubscribe") return "Reply YES to receive Murage Foundation WhatsApp/SMS messages again, or NO to cancel.";
+  if (session.step === "resubscribe")
+    return "Reply YES to receive Murage Foundation WhatsApp/SMS messages again, or NO to cancel.";
   if (session.step === "start") return "Welcome to Murage Foundation! What is your full name?";
-  if (session.step === "name") return "Choose the role you are applying for:\n1. Member\n2. Board member\n3. Secretary\n4. Assistant secretary\nReply with 1, 2, 3 or 4.";
-  if (session.step === "role") return "What is your email address? Reply SKIP if you will use the bot only (no web account).";
+  if (session.step === "name")
+    return "Choose the role you are applying for:\n1. Member\n2. Board member\n3. Secretary\n4. Assistant secretary\nReply with 1, 2, 3 or 4.";
+  if (session.step === "role")
+    return "What is your email address? Reply SKIP if you will use the bot only (no web account).";
   if (session.step === "email" || session.step === "confirm") {
     return `Please confirm your application:\nName: ${data.fullName ?? "—"}\nRole: ${(data.role ?? "member").replace(/_/g, " ")}\nPhone: ${session.phone_number}\nEmail: ${data.email ?? "None - Phone Only"}\n\nReply YES to consent to membership data processing and receive messages via this channel, or NO to cancel. Text STOP anytime to unsubscribe.`;
   }
@@ -143,7 +163,12 @@ async function beginJoin(phone: string, channel: Channel): Promise<string> {
   }
   const existing = await dbResult(
     "check pending application",
-    adminClient().from("pending_registrations").select("id").eq("phone_number", phone).eq("status", "pending").limit(1),
+    adminClient()
+      .from("pending_registrations")
+      .select("id")
+      .eq("phone_number", phone)
+      .eq("status", "pending")
+      .limit(1),
   );
   if (existing && existing.length > 0) return APPLICATION_PENDING;
 
@@ -245,11 +270,15 @@ async function handleSession(session: Session, input: string): Promise<string> {
     if (upper !== "YES") return sessionPrompt(session);
     await dbResult(
       "re-subscribe member",
-      adminClient().from("profiles").update({
-        whatsapp_opt_in: true,
-        whatsapp_opt_in_at: new Date().toISOString(),
-        prefers_sms: session.channel === "sms",
-      }).eq("phone_number", session.phone_number).eq("status", "approved"),
+      adminClient()
+        .from("profiles")
+        .update({
+          whatsapp_opt_in: true,
+          whatsapp_opt_in_at: new Date().toISOString(),
+          prefers_sms: session.channel === "sms",
+        })
+        .eq("phone_number", session.phone_number)
+        .eq("status", "approved"),
     );
     await removeSession(session);
     return "✅ You are subscribed again. Text HELP for commands, or STOP to unsubscribe.";
@@ -264,7 +293,8 @@ async function handleSession(session: Session, input: string): Promise<string> {
   }
   if (session.step === "name") {
     const role = ROLES[text];
-    if (!role) return "Reply with 1 (Member), 2 (Board member), 3 (Secretary) or 4 (Assistant secretary).";
+    if (!role)
+      return "Reply with 1 (Member), 2 (Board member), 3 (Secretary) or 4 (Assistant secretary).";
     await updateSession(session, "role", { ...data, role });
     return sessionPrompt({ ...session, step: "role" });
   }
@@ -293,43 +323,56 @@ function approvedMember(member: Profile | null): member is Profile {
 async function balance(phone: string): Promise<string> {
   const member = await getMemberByPhone(phone);
   if (!approvedMember(member)) return NOT_REGISTERED;
-  const total = await dbResult("confirmed balance", adminClient().rpc("bot_confirmed_total", { _member_id: member.id }));
+  const total = await dbResult(
+    "confirmed balance",
+    adminClient().rpc("bot_confirmed_total", { _member_id: member.id }),
+  );
   const last = await dbResult(
     "last confirmed contribution",
-    adminClient().from("contributions")
+    adminClient()
+      .from("contributions")
       .select("amount,contributed_on")
-      .eq("member_id", member.id).eq("status", "confirmed")
-      .order("contributed_on", { ascending: false }).order("created_at", { ascending: false })
-      .limit(1).maybeSingle(),
+      .eq("member_id", member.id)
+      .eq("status", "confirmed")
+      .order("contributed_on", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   );
   return `💰 Your Balance\n────────────────\nName: ${member.full_name ?? "Member"}\nTotal Contributions: KES ${formatKES(Number(total ?? 0))}\nLast Contribution: ${last ? `KES ${formatKES(Number(last.amount))} on ${formatKenyanDate(last.contributed_on)}` : "None yet"}\n\nPay via M-Pesa:\nPaybill: ${payment.paybill}\nAccount: ${payment.account}\n\nText HELP for all commands`;
 }
 
-async function activeLoan(phone: string) {
-  const member = await getMemberByPhone(phone);
-  if (!approvedMember(member)) return null;
+async function activeLoan(memberId: string) {
   const loans = await dbResult(
     "active member loans",
-    adminClient().from("loans").select("id,amount,loan_type,decision_at")
-      .eq("member_id", member.id).in("status", ["approved", "disbursed"])
-      .order("decision_at", { ascending: false }).limit(1),
+    adminClient()
+      .from("loans")
+      .select("id,amount,loan_type,decision_at")
+      .eq("member_id", memberId)
+      .in("status", ["approved", "disbursed"])
+      .order("decision_at", { ascending: false })
+      .limit(1),
   );
   return loans?.[0] ?? null;
 }
 
 async function repaymentRows(loanId: string) {
-  return (await dbResult(
-    "member repayment schedule",
-    adminClient().from("loan_repayments")
-      .select("installment_number,amount_due,amount_paid,due_date,status")
-      .eq("loan_id", loanId).order("due_date"),
-  )) ?? [];
+  return (
+    (await dbResult(
+      "member repayment schedule",
+      adminClient()
+        .from("loan_repayments")
+        .select("installment_number,amount_due,amount_paid,due_date,status")
+        .eq("loan_id", loanId)
+        .order("due_date"),
+    )) ?? []
+  );
 }
 
 async function loanSummary(phone: string): Promise<string> {
   const member = await getMemberByPhone(phone);
   if (!approvedMember(member)) return NOT_REGISTERED;
-  const loan = await activeLoan(phone);
+  const loan = await activeLoan(member.id);
   if (!loan) return `You have no active loans.\nVisit ${foundation.webUrl}\nto apply for a loan.`;
   const rows = await repaymentRows(loan.id);
   const paid = rows.reduce((sum, row) => sum + Number(row.amount_paid), 0);
@@ -344,23 +387,33 @@ async function loanSummary(phone: string): Promise<string> {
 async function schedule(phone: string): Promise<string> {
   const member = await getMemberByPhone(phone);
   if (!approvedMember(member)) return NOT_REGISTERED;
-  const loan = await activeLoan(phone);
+  const loan = await activeLoan(member.id);
   if (!loan) return `You have no active loans.\nVisit ${foundation.webUrl}\nto apply for a loan.`;
   const rows = (await repaymentRows(loan.id))
     .filter((row) => Number(row.amount_paid) < Number(row.amount_due))
     .slice(0, 5);
-  const lines = rows.length === 0
-    ? "All installments are paid."
-    : rows.map((row) => {
-      const status = row.due_date < new Date().toISOString().slice(0, 10) ? "❌" : "⏳";
-      return `${row.installment_number} ${formatKenyanDate(row.due_date)} KES ${formatKES(Number(row.amount_due) - Number(row.amount_paid))} ${status}`;
-    }).join("\n");
+  const lines =
+    rows.length === 0
+      ? "All installments are paid."
+      : rows
+          .map((row) => {
+            const status =
+              row.due_date < new Date(Date.now() + 3 * 60 * 60 * 1_000).toISOString().slice(0, 10)
+                ? "❌"
+                : "⏳";
+            return `${row.installment_number} ${formatKenyanDate(row.due_date)} KES ${formatKES(Number(row.amount_due) - Number(row.amount_paid))} ${status}`;
+          })
+          .join("\n");
   return `📅 Repayment Schedule\n────────────────────\nLoan Total: KES ${formatKES(Number(loan.amount))}\n\n${lines}\n\nStatus: ✅ Paid  ⏳ Pending  ❌ Overdue\n\nText LOANS for loan summary`;
 }
 
 async function deposit(phone: string, input: string, channel: Channel): Promise<string> {
   const parts = input.trim().split(/\s+/);
-  if (parts.length !== 3 || !/^\d+(?:\.\d{1,2})?$/.test(parts[1]) || !/^[A-Z0-9-]{5,30}$/i.test(parts[2])) {
+  if (
+    parts.length !== 3 ||
+    !/^\d+(?:\.\d{1,2})?$/.test(parts[1]) ||
+    !/^[A-Z0-9-]{5,30}$/i.test(parts[2])
+  ) {
     return DEPOSIT_USAGE;
   }
   const amount = Number(parts[1]);
@@ -370,10 +423,14 @@ async function deposit(phone: string, input: string, channel: Channel): Promise<
   if (!approvedMember(member)) return NOT_REGISTERED;
   const existing = await dbResult(
     "check M-Pesa reference",
-    adminClient().from("contributions").select("id")
-      .or(`mpesa_transaction_id.ilike.${ref},reference.ilike.${ref}`).limit(1),
+    adminClient()
+      .from("contributions")
+      .select("id")
+      .or(`mpesa_transaction_id.ilike.${ref},reference.ilike.${ref}`)
+      .limit(1),
   );
-  if (existing && existing.length > 0) return "That M-Pesa reference has already been submitted. Contact the treasurer if you need help.";
+  if (existing && existing.length > 0)
+    return "That M-Pesa reference has already been submitted. Contact the treasurer if you need help.";
   try {
     await dbResult(
       "submit M-Pesa contribution",
@@ -408,14 +465,25 @@ async function deposit(phone: string, input: string, channel: Channel): Promise<
 }
 
 async function pendingContributions(phone: string): Promise<string> {
-  if (!(await isOfficer(phone))) return "⛔ This command is for officers only.\nText HELP for available commands.";
+  if (!(await isOfficer(phone)))
+    return "⛔ This command is for officers only.\nText HELP for available commands.";
   const client = adminClient();
   let count: number;
-  let rows: Array<{ amount: number; mpesa_transaction_id: string | null; reference: string | null; profiles: { full_name: string | null } | null }>;
+  let rows: Array<{
+    amount: number;
+    mpesa_transaction_id: string | null;
+    reference: string | null;
+    profiles: { full_name: string | null } | null;
+  }>;
   try {
-    const response = await client.from("contributions")
-      .select("amount,mpesa_transaction_id,reference,profiles:member_id(full_name)", { count: "exact" })
-      .eq("status", "pending").order("created_at", { ascending: true }).limit(10);
+    const response = await client
+      .from("contributions")
+      .select("amount,mpesa_transaction_id,reference,profiles:member_id(full_name)", {
+        count: "exact",
+      })
+      .eq("status", "pending")
+      .order("created_at", { ascending: true })
+      .limit(10);
     if (response.error) throw response.error;
     count = response.count ?? 0;
     rows = response.data ?? [];
@@ -423,30 +491,47 @@ async function pendingContributions(phone: string): Promise<string> {
     console.error("[whatsapp-bot] pending contributions query failed", error);
     throw error;
   }
-  const lines = rows.map((row, index) => `${index + 1}. ${row.profiles?.full_name ?? "Member"} KES ${formatKES(Number(row.amount))} Ref:${row.mpesa_transaction_id ?? row.reference ?? "—"}`).join("\n");
+  const lines = rows
+    .map(
+      (row, index) =>
+        `${index + 1}. ${row.profiles?.full_name ?? "Member"} KES ${formatKES(Number(row.amount))} Ref:${row.mpesa_transaction_id ?? row.reference ?? "—"}`,
+    )
+    .join("\n");
   return `📋 Pending Contributions (${count})\n──────────────────────────────────\n${lines || "None pending."}\n\nReply: CONFIRM {ref} to approve${count > rows.length ? "\nShowing first 10." : ""}`;
 }
 
 async function confirmContribution(phone: string, input: string): Promise<string> {
-  if (!(await isOfficer(phone))) return "⛔ This command is for officers only.\nText HELP for available commands.";
+  if (!(await isOfficer(phone)))
+    return "⛔ This command is for officers only.\nText HELP for available commands.";
   const parts = input.trim().split(/\s+/);
-  if (parts.length !== 2 || !/^[A-Z0-9-]{5,30}$/i.test(parts[1])) return "Reply CONFIRM {mpesa_ref}, e.g. CONFIRM QWE123456.";
+  if (parts.length !== 2 || !/^[A-Z0-9-]{5,30}$/i.test(parts[1]))
+    return "Reply CONFIRM {mpesa_ref}, e.g. CONFIRM QWE123456.";
   const ref = parts[1].toUpperCase();
   const contribution = await dbResult(
     "find pending contribution",
-    adminClient().from("contributions").select("id,amount,member_id,mpesa_transaction_id")
-      .ilike("mpesa_transaction_id", ref).eq("status", "pending").maybeSingle(),
+    adminClient()
+      .from("contributions")
+      .select("id,amount,member_id,mpesa_transaction_id")
+      .ilike("mpesa_transaction_id", ref)
+      .eq("status", "pending")
+      .maybeSingle(),
   );
   if (!contribution) return "No pending contribution has that M-Pesa reference.";
   const officer = await getMemberByPhone(phone);
   if (!officer) return "Officer profile not found.";
   const updated = await dbResult(
     "confirm pending contribution",
-    adminClient().from("contributions").update({
-      status: "confirmed",
-      confirmed_by: officer.id,
-      confirmed_at: new Date().toISOString(),
-    }).eq("id", contribution.id).eq("status", "pending").select("id").maybeSingle(),
+    adminClient()
+      .from("contributions")
+      .update({
+        status: "confirmed",
+        confirmed_by: officer.id,
+        confirmed_at: new Date().toISOString(),
+      })
+      .eq("id", contribution.id)
+      .eq("status", "pending")
+      .select("id")
+      .maybeSingle(),
   );
   if (!updated) return "That contribution has already been reviewed.";
   try {
@@ -458,11 +543,27 @@ async function confirmContribution(phone: string, input: string): Promise<string
   }
 }
 
-async function stop(phone: string, session: Session | null): Promise<string> {
-  if (session) await removeSession(session);
+async function stop(phone: string): Promise<string> {
+  // Revoke conversations on BOTH channels: an SMS opt-out must also cancel an
+  // unfinished WhatsApp JOIN (and vice versa).
+  await dbResult(
+    "discard active bot conversations",
+    adminClient().from("whatsapp_sessions").delete().eq("phone_number", phone),
+  );
+  // An applicant may withdraw after replying YES but before admin approval.
+  // Never approve a pending opt-out and then send an unsolicited welcome.
+  await dbResult(
+    "withdraw pending application",
+    adminClient()
+      .from("pending_registrations")
+      .update({ status: "rejected", admin_notes: "Withdrawn by applicant via STOP" })
+      .eq("phone_number", phone)
+      .eq("status", "pending"),
+  );
   await dbResult(
     "unsubscribe phone",
-    adminClient().from("profiles")
+    adminClient()
+      .from("profiles")
       .update({ whatsapp_opt_in: false, whatsapp_opt_in_at: null })
       .eq("phone_number", phone),
   );
@@ -472,20 +573,29 @@ async function stop(phone: string, session: Session | null): Promise<string> {
 async function handleMessage(phone: string, text: string, channel: Channel): Promise<string> {
   const input = text.trim();
   const command = input.split(/\s+/)[0].toUpperCase();
-  const session = await loadSession(phone, channel);
   // STOP must always take effect immediately, even mid-JOIN.
-  if (command === "STOP") return stop(phone, session);
+  if (command === "STOP") return stop(phone);
+  const session = await loadSession(phone, channel);
   if (session) return handleSession(session, input);
   switch (command) {
-    case "JOIN": return beginJoin(phone, channel);
-    case "BAL": return balance(phone);
-    case "LOANS": return loanSummary(phone);
-    case "DEPOSIT": return deposit(phone, input, channel);
-    case "SCHEDULE": return schedule(phone);
-    case "PENDING": return pendingContributions(phone);
-    case "CONFIRM": return confirmContribution(phone, input);
-    case "HELP": return HELP;
-    default: return "❓ Command not recognized.\n\nText HELP to see all commands.\n\nMurage Foundation Bot 🌟";
+    case "JOIN":
+      return beginJoin(phone, channel);
+    case "BAL":
+      return balance(phone);
+    case "LOANS":
+      return loanSummary(phone);
+    case "DEPOSIT":
+      return deposit(phone, input, channel);
+    case "SCHEDULE":
+      return schedule(phone);
+    case "PENDING":
+      return pendingContributions(phone);
+    case "CONFIRM":
+      return confirmContribution(phone, input);
+    case "HELP":
+      return HELP;
+    default:
+      return "❓ Command not recognized.\n\nText HELP to see all commands.\n\nMurage Foundation Bot 🌟";
   }
 }
 
@@ -494,7 +604,7 @@ async function handleMessage(phone: string, text: string, channel: Channel): Pro
 // A header is also accepted for callers that support one. Fail closed with 200.
 function validSecret(provided: string | null): boolean {
   const expected = Deno.env.get("AFRICASTALKING_WEBHOOK_SECRET");
-  if (!expected || !provided) return false;
+  if (!expected || expected.length < 32 || !provided) return false;
   const a = new TextEncoder().encode(expected);
   const b = new TextEncoder().encode(provided);
   let difference = a.length ^ b.length;
@@ -519,10 +629,17 @@ Deno.serve(async (request) => {
     if (body.length > 4_096) throw new Error("Webhook payload too large");
     const params = new URLSearchParams(body);
     phone = normalizePhone(params.get("from") ?? "");
-    const incomingChannel = params.get("channel")?.toLowerCase() ?? "sms";
-    if (incomingChannel !== "sms" && incomingChannel !== "whatsapp") throw new Error("Unsupported channel");
+    // Providers do not consistently include a channel field. Configure the
+    // WhatsApp callback with &channel=whatsapp when it is not in the payload.
+    const incomingChannel = (
+      params.get("channel") ||
+      url.searchParams.get("channel") ||
+      "sms"
+    ).toLowerCase();
+    if (incomingChannel !== "sms" && incomingChannel !== "whatsapp")
+      throw new Error("Unsupported channel");
     channel = incomingChannel;
-    const message = params.get("text")?.trim() ?? "";
+    const message = (params.get("text") ?? params.get("message") ?? "").trim();
     if (message.length > 1_000) throw new Error("Message too long");
     const reply = await handleMessage(phone, message, channel);
     await respond(phone, channel, reply);
@@ -530,7 +647,11 @@ Deno.serve(async (request) => {
     console.error("[whatsapp-bot] webhook processing failed", error);
     if (phone) {
       try {
-        await respond(phone, channel, "Sorry, we couldn't process that right now. Please try again later or call +254182528510.");
+        await respond(
+          phone,
+          channel,
+          "Sorry, we couldn't process that right now. Please try again later or call +254182528510.",
+        );
       } catch (sendError) {
         console.error("[whatsapp-bot] error reply failed", sendError);
       }

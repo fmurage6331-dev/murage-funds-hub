@@ -21,14 +21,25 @@ const cors = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-function reply(body: { success: boolean; sent?: number; failed?: number; error?: string }, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
+function reply(
+  body: { success: boolean; sent?: number; failed?: number; error?: string },
+  status = 200,
+): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...cors, "Content-Type": "application/json" },
+  });
 }
 
 function parseRequest(input: unknown): DeliveryRequest {
-  if (typeof input !== "object" || input === null || Array.isArray(input)) throw new Error("Invalid event");
+  if (typeof input !== "object" || input === null || Array.isArray(input))
+    throw new Error("Invalid event");
   const data: Record<string, unknown> = input as Record<string, unknown>;
-  if (data.event !== "contribution_confirmed" && data.event !== "loan_decided" && data.event !== "meeting_scheduled") {
+  if (
+    data.event !== "contribution_confirmed" &&
+    data.event !== "loan_decided" &&
+    data.event !== "meeting_scheduled"
+  ) {
     throw new Error("Unsupported notification event");
   }
   if (typeof data.recordId !== "string" || !/^[0-9a-f-]{36}$/i.test(data.recordId)) {
@@ -40,23 +51,37 @@ function parseRequest(input: unknown): DeliveryRequest {
 async function authorize(request: Request, event: Event): Promise<void> {
   const token = request.headers.get("Authorization")?.replace(/^Bearer\s+/i, "");
   const url = Deno.env.get("SUPABASE_URL") ?? Deno.env.get("VITE_SUPABASE_URL");
-  const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? Deno.env.get("VITE_SUPABASE_PUBLISHABLE_KEY");
+  const anonKey =
+    Deno.env.get("SUPABASE_ANON_KEY") ?? Deno.env.get("VITE_SUPABASE_PUBLISHABLE_KEY");
   if (!token || !url || !anonKey) throw new Error("Unauthorized");
   const auth = createClient<Database>(url, anonKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  const { data: { user }, error } = await auth.auth.getUser(token);
+  const {
+    data: { user },
+    error,
+  } = await auth.auth.getUser(token);
   if (error || !user) throw new Error("Unauthorized");
-  const profile = await dbResult("notification actor", adminClient().from("profiles")
-    .select("status,is_anonymized").eq("id", user.id).single());
+  const profile = await dbResult(
+    "notification actor",
+    adminClient().from("profiles").select("status,is_anonymized").eq("id", user.id).single(),
+  );
   if (profile?.status !== "approved" || profile.is_anonymized) throw new Error("Unauthorized");
-  const allowedRoles: Database["public"]["Enums"]["app_role"][] = event === "contribution_confirmed"
-    ? ["admin", "treasurer"]
-    : event === "loan_decided"
-      ? ["admin", "treasurer", "chairman", "board_member"]
-      : ["admin", "secretary", "assistant_secretary"];
-  const roles = await dbResult("notification role", adminClient().from("user_roles")
-    .select("id").eq("user_id", user.id).in("role", allowedRoles).limit(1));
+  const allowedRoles: Database["public"]["Enums"]["app_role"][] =
+    event === "contribution_confirmed"
+      ? ["admin", "treasurer"]
+      : event === "loan_decided"
+        ? ["admin", "treasurer", "chairman", "board_member"]
+        : ["admin", "secretary", "assistant_secretary"];
+  const roles = await dbResult(
+    "notification role",
+    adminClient()
+      .from("user_roles")
+      .select("id")
+      .eq("user_id", user.id)
+      .in("role", allowedRoles)
+      .limit(1),
+  );
   if (!roles?.length) throw new Error("Officer access required");
 }
 
@@ -79,6 +104,9 @@ Deno.serve(async (request) => {
   } catch (error) {
     console.error("[bot-notifications] delivery request failed", error);
     const message = error instanceof Error ? error.message : "Delivery failed";
-    return reply({ success: false, error: message }, message === "Unauthorized" || message === "Officer access required" ? 403 : 400);
+    return reply(
+      { success: false, error: message },
+      message === "Unauthorized" || message === "Officer access required" ? 403 : 400,
+    );
   }
 });

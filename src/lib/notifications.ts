@@ -5,8 +5,12 @@ type BotEvent = "contribution_confirmed" | "loan_decided" | "meeting_scheduled";
 type DeliveryResult = { success: boolean; sent?: number; failed?: number; error?: string };
 
 function isDeliveryResult(value: unknown): value is DeliveryResult {
-  return typeof value === "object" && value !== null && "success" in value &&
-    typeof value.success === "boolean";
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "success" in value &&
+    typeof value.success === "boolean"
+  );
 }
 
 // The browser never receives an Africa's Talking API key or supplies arbitrary
@@ -31,8 +35,10 @@ export async function sendWhatsAppSMS({
       throw error;
     }
     const response: unknown = data;
-    if (!isDeliveryResult(response) || !response.success) throw new Error("Notification delivery failed");
-    if (response.failed) throw new Error(`${response.failed} member notifications could not be delivered`);
+    if (!isDeliveryResult(response) || !response.success)
+      throw new Error("Notification delivery failed");
+    if (response.failed)
+      throw new Error(`${response.failed} member notifications could not be delivered`);
     return response;
   } catch (error) {
     console.error("[Notification Service] WhatsApp/SMS delivery failed", error);
@@ -76,12 +82,14 @@ export async function notifyLoanStatusChange({
 }): Promise<void> {
   const deliveries: Promise<unknown>[] = [];
   if (memberEmail) {
-    deliveries.push(sendNotificationEmail({
-      to: memberEmail,
-      subject: `Murage Foundation — Loan Application ${status.toUpperCase()}`,
-      template: "loan_status_changed",
-      data: { memberName, loanAmount, loanType, status, reason, repaymentMonths },
-    }));
+    deliveries.push(
+      sendNotificationEmail({
+        to: memberEmail,
+        subject: `Murage Foundation — Loan Application ${status.toUpperCase()}`,
+        template: "loan_status_changed",
+        data: { memberName, loanAmount, loanType, status, reason, repaymentMonths },
+      }),
+    );
   }
   if (loanId && (status === "approved" || status === "rejected")) {
     deliveries.push(sendWhatsAppSMS({ event: "loan_decided", recordId: loanId }));
@@ -110,12 +118,14 @@ export async function notifyContributionReview({
 }): Promise<void> {
   const deliveries: Promise<unknown>[] = [];
   if (memberEmail) {
-    deliveries.push(sendNotificationEmail({
-      to: memberEmail,
-      subject: `Murage Foundation — Contribution ${status === "confirmed" ? "Confirmed" : "Update"}`,
-      template: "contribution_reviewed",
-      data: { memberName, amount, status, method, reference, notes },
-    }));
+    deliveries.push(
+      sendNotificationEmail({
+        to: memberEmail,
+        subject: `Murage Foundation — Contribution ${status === "confirmed" ? "Confirmed" : "Update"}`,
+        template: "contribution_reviewed",
+        data: { memberName, amount, status, method, reference, notes },
+      }),
+    );
   }
   if (status === "confirmed") {
     deliveries.push(sendWhatsAppSMS({ event: "contribution_confirmed", recordId: contributionId }));
@@ -137,19 +147,26 @@ export async function notifyNewMeeting({
   agenda?: string;
 }): Promise<void> {
   try {
-    const { data: members, error } = await supabase.from("profiles")
-      .select("email").eq("status", "approved").eq("is_anonymized", false);
+    const { data: members, error } = await supabase
+      .from("profiles")
+      .select("email")
+      .eq("status", "approved")
+      .eq("is_anonymized", false);
     if (error) throw error;
-    const emails = (members ?? []).flatMap((member) => member.email ? [member.email] : []);
+    const emails = (members ?? []).flatMap((member) => (member.email ? [member.email] : []));
     const phoneDelivery = sendWhatsAppSMS({ event: "meeting_scheduled", recordId: meetingId });
     await Promise.all([
       phoneDelivery,
-      ...(emails.length ? [sendNotificationEmail({
-        to: emails,
-        subject: `Notice of Foundation Meeting: ${title}`,
-        template: "meeting_scheduled",
-        data: { title, scheduledFor, location, agenda },
-      })] : []),
+      ...(emails.length
+        ? [
+            sendNotificationEmail({
+              to: emails,
+              subject: `Notice of Foundation Meeting: ${title}`,
+              template: "meeting_scheduled",
+              data: { title, scheduledFor, location, agenda },
+            }),
+          ]
+        : []),
     ]);
   } catch (error) {
     console.error("[Notification Service] Meeting broadcast failed", error);

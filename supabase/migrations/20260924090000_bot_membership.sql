@@ -33,16 +33,21 @@ CREATE TABLE IF NOT EXISTS public.pending_registrations (
 );
 ALTER TABLE public.pending_registrations ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now();
 ALTER TABLE public.pending_registrations ENABLE ROW LEVEL SECURITY;
+-- Replace any pre-existing permissive policies: applicants' PII is admin-only.
+REVOKE ALL ON public.pending_registrations FROM anon, authenticated;
 GRANT SELECT ON public.pending_registrations TO authenticated;
 GRANT ALL ON public.pending_registrations TO service_role;
-REVOKE INSERT, UPDATE, DELETE ON public.pending_registrations FROM anon, authenticated;
--- Approvals/rejections only run in the Edge Function with a verified admin JWT.
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'pending_registrations' AND policyname = 'pending registrations admin read') THEN
-    CREATE POLICY "pending registrations admin read" ON public.pending_registrations FOR SELECT TO authenticated
-      USING (public.has_role(auth.uid(), 'admin'));
-  END IF;
+DO $$ DECLARE previous_policy text;
+BEGIN
+  FOR previous_policy IN SELECT policyname FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'pending_registrations'
+  LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.pending_registrations', previous_policy);
+  END LOOP;
 END $$;
+-- Approvals/rejections only run in the Edge Function with a verified admin JWT.
+CREATE POLICY "pending registrations admin read" ON public.pending_registrations FOR SELECT TO authenticated
+  USING (public.has_role(auth.uid(), 'admin'));
 
 CREATE TABLE IF NOT EXISTS public.whatsapp_sessions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -75,6 +80,17 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+-- Phone-only board members cannot log in to cast a web vote. Do not include
+-- their roles in the online-voting quorum or a board decision could deadlock.
+CREATE OR REPLACE FUNCTION public.board_majority_count()
+RETURNS integer LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT GREATEST(1, (COUNT(*) / 2 + 1)::integer)
+  FROM public.user_roles roles JOIN auth.users voters ON voters.id = roles.user_id
+  WHERE roles.role = 'board_member';
+$$;
+REVOKE EXECUTE ON FUNCTION public.board_majority_count() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.board_majority_count() TO authenticated, service_role;
+
 -- Preserve the former auth-user deletion cascade for web members only.
 CREATE OR REPLACE FUNCTION public.remove_deleted_auth_profile()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
@@ -87,6 +103,40 @@ DROP TRIGGER IF EXISTS on_auth_user_deleted_remove_profile ON auth.users;
 CREATE TRIGGER on_auth_user_deleted_remove_profile AFTER DELETE ON auth.users
 FOR EACH ROW EXECUTE FUNCTION public.remove_deleted_auth_profile();
 REVOKE EXECUTE ON FUNCTION public.remove_deleted_auth_profile() FROM PUBLIC, anon, authenticated;
+
+-- Normalize legacy Kenyan numbers before indexing. Resolve duplicate numbers
+-- manually if this migration surfaces one; never silently merge two members.
+UPDATE public.profiles SET phone_number = CASE
+  WHEN regexp_replace(phone_number, '[^0-9]', '', 'g') ~ '^00254[0-9]{9}$'
+    THEN substr(regexp_replace(phone_number, '[^0-9]', '', 'g'), 3)
+  WHEN regexp_replace(phone_number, '[^0-9]', '', 'g') ~ '^0[0-9]{9}$'
+    THEN '254' || substr(regexp_replace(phone_number, '[^0-9]', '', 'g'), 2)
+  WHEN regexp_replace(phone_number, '[^0-9]', '', 'g') ~ '^[0-9]{9}$'
+    THEN '254' || regexp_replace(phone_number, '[^0-9]', '', 'g')
+  ELSE regexp_replace(phone_number, '[^0-9]', '', 'g') END
+WHERE phone_number IS NOT NULL AND phone_number !~ '^254[0-9]{9}$';
+UPDATE public.pending_registrations SET phone_number = CASE
+  WHEN regexp_replace(phone_number, '[^0-9]', '', 'g') ~ '^00254[0-9]{9}$'
+    THEN substr(regexp_replace(phone_number, '[^0-9]', '', 'g'), 3)
+  WHEN regexp_replace(phone_number, '[^0-9]', '', 'g') ~ '^0[0-9]{9}$'
+    THEN '254' || substr(regexp_replace(phone_number, '[^0-9]', '', 'g'), 2)
+  WHEN regexp_replace(phone_number, '[^0-9]', '', 'g') ~ '^[0-9]{9}$'
+    THEN '254' || regexp_replace(phone_number, '[^0-9]', '', 'g')
+  ELSE regexp_replace(phone_number, '[^0-9]', '', 'g') END
+WHERE phone_number !~ '^254[0-9]{9}$';
+UPDATE public.whatsapp_sessions SET phone_number = CASE
+  WHEN regexp_replace(phone_number, '[^0-9]', '', 'g') ~ '^00254[0-9]{9}$'
+    THEN substr(regexp_replace(phone_number, '[^0-9]', '', 'g'), 3)
+  WHEN regexp_replace(phone_number, '[^0-9]', '', 'g') ~ '^0[0-9]{9}$'
+    THEN '254' || substr(regexp_replace(phone_number, '[^0-9]', '', 'g'), 2)
+  WHEN regexp_replace(phone_number, '[^0-9]', '', 'g') ~ '^[0-9]{9}$'
+    THEN '254' || regexp_replace(phone_number, '[^0-9]', '', 'g')
+  ELSE regexp_replace(phone_number, '[^0-9]', '', 'g') END
+WHERE phone_number !~ '^254[0-9]{9}$';
+CREATE UNIQUE INDEX IF NOT EXISTS profiles_phone_number_key ON public.profiles(phone_number) WHERE phone_number IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS pending_registration_one_open_phone ON public.pending_registrations(phone_number) WHERE status = 'pending';
+CREATE UNIQUE INDEX IF NOT EXISTS whatsapp_sessions_phone_channel_key ON public.whatsapp_sessions(phone_number, channel);
+CREATE UNIQUE INDEX IF NOT EXISTS contributions_mpesa_transaction_key ON public.contributions(upper(mpesa_transaction_id)) WHERE mpesa_transaction_id IS NOT NULL;
 
 -- Only trusted officers/server code may change an identity or re-enable messaging;
 -- a member must not be able to take over another person's phone number.
@@ -116,20 +166,6 @@ DO $$ BEGIN
       USING (public.has_role(auth.uid(), 'admin')) WITH CHECK (public.has_role(auth.uid(), 'admin'));
   END IF;
 END $$;
-
--- Normalize legacy Kenyan numbers before indexing. Resolve duplicate numbers
--- manually if this migration surfaces one; never silently merge two members.
-UPDATE public.profiles SET phone_number = CASE
-  WHEN regexp_replace(phone_number, '[^0-9]', '', 'g') ~ '^0[0-9]{9}$'
-    THEN '254' || substr(regexp_replace(phone_number, '[^0-9]', '', 'g'), 2)
-  WHEN regexp_replace(phone_number, '[^0-9]', '', 'g') ~ '^[0-9]{9}$'
-    THEN '254' || regexp_replace(phone_number, '[^0-9]', '', 'g')
-  ELSE regexp_replace(phone_number, '[^0-9]', '', 'g') END
-WHERE phone_number IS NOT NULL AND phone_number !~ '^254[0-9]{9}$';
-CREATE UNIQUE INDEX IF NOT EXISTS profiles_phone_number_key ON public.profiles(phone_number) WHERE phone_number IS NOT NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS pending_registration_one_open_phone ON public.pending_registrations(phone_number) WHERE status = 'pending';
-CREATE UNIQUE INDEX IF NOT EXISTS whatsapp_sessions_phone_channel_key ON public.whatsapp_sessions(phone_number, channel);
-CREATE UNIQUE INDEX IF NOT EXISTS contributions_mpesa_transaction_key ON public.contributions(upper(mpesa_transaction_id)) WHERE mpesa_transaction_id IS NOT NULL;
 
 -- Realtime count/list refresh for the admin tab (RLS filters subscribers).
 DO $$ BEGIN
@@ -166,6 +202,9 @@ BEGIN
   END IF;
   IF application.requested_role NOT IN ('member', 'board_member', 'secretary', 'assistant_secretary') THEN
     RAISE EXCEPTION 'Invalid requested role';
+  END IF;
+  IF lower(application.email) = 'francismurageweb@gmail.com' THEN
+    RAISE EXCEPTION 'The administrator email cannot be used for bot registration';
   END IF;
   IF application.email IS NOT NULL AND
      (_auth_user_id IS NULL OR NOT EXISTS (SELECT 1 FROM auth.users WHERE id = _auth_user_id AND lower(email) = lower(application.email))) THEN

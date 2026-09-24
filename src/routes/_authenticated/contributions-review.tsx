@@ -82,7 +82,9 @@ function Page() {
         status,
         method: row.method,
         reference: row.mpesa_transaction_id ?? row.reference ?? undefined,
-      }).catch((notificationError: unknown) => console.error("Failed sending contribution notification", notificationError));
+      }).catch((notificationError: unknown) =>
+        console.error("Failed sending contribution notification", notificationError),
+      );
     },
     onSuccess: () => {
       toast.success("Updated");
