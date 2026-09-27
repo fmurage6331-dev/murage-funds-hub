@@ -1,4 +1,4 @@
-import { CreditCard, Smartphone } from "lucide-react";
+import { CreditCard, Info, Smartphone } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
@@ -47,6 +47,11 @@ export function PaymentInfoCard() {
             our WhatsApp/SMS bot
           </li>
         </ol>
+        <p className="flex items-start gap-2 rounded-md border border-emerald-300/70 bg-white/60 p-2 text-xs">
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          Always quote the M-Pesa reference code so the treasury can match the contribution to your
+          member record.
+        </p>
       </CardContent>
     </Card>
   );

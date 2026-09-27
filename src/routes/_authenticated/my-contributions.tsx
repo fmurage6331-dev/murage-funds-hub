@@ -1,4 +1,4 @@
-import { PaymentInfoCard } from "@/components/PaymentInfoCard";
+import { PaymentInfoCard } from "@/components/shared/PaymentInfoCard";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
