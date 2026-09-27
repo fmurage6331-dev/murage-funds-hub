@@ -1,5 +1,5 @@
 import { adminAction } from "@/lib/admin-actions";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
@@ -20,6 +20,15 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -30,8 +39,9 @@ import {
   ShieldCheck,
   MessageSquare,
   Smartphone,
-  Mail,
   Phone,
+  Mail,
+  UserPlus,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useRoles } from "@/hooks/use-roles";
@@ -136,6 +146,88 @@ function Page() {
   const invalidateAll = () => {
     qc.invalidateQueries({ queryKey: ["users-with-roles"] });
     qc.invalidateQueries({ queryKey: ["bot-pending-registrations"] });
+  };
+
+  // ── Add Manual Member Dialog State ────────────
+  const [addMemberOpen, setAddMemberOpen] = useState(false);
+  const [addFullName, setAddFullName] = useState("");
+  const [addPhoneNumber, setAddPhoneNumber] = useState("");
+  const [addEmail, setAddEmail] = useState("");
+  const [addRoleVal, setAddRoleVal] = useState<string>("member");
+
+  const createMemberMutation = useMutation({
+    mutationFn: async (vars: {
+      fullName: string;
+      phoneNumber: string;
+      email: string | null;
+      role: string;
+    }) => {
+      const {
+        data: { session },
+        error,
+      } = await supabase.auth.getSession();
+      if (error) throw error;
+      if (!session) throw new Error("Please sign in again.");
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-actions`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            action: "create_manual_member",
+            fullName: vars.fullName,
+            phoneNumber: vars.phoneNumber,
+            email: vars.email,
+            role: vars.role,
+          }),
+        },
+      );
+
+      let result: { success?: boolean; error?: string; memberId?: string } = {};
+      try {
+        result = (await response.json()) as {
+          success?: boolean;
+          error?: string;
+          memberId?: string;
+        };
+      } catch {
+        result = {};
+      }
+      if (!response.ok || result.success !== true) {
+        throw new Error(result.error ?? "Failed to add member");
+      }
+      return result;
+    },
+    onSuccess: (_, vars) => {
+      toast.success(
+        `${vars.fullName} added successfully! They can use the WhatsApp/SMS bot once it goes live.`,
+      );
+      setAddMemberOpen(false);
+      setAddFullName("");
+      setAddPhoneNumber("");
+      setAddEmail("");
+      setAddRoleVal("member");
+      invalidateAll();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const handleCreateMemberSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!addFullName.trim() || !addPhoneNumber.trim()) {
+      toast.error("Full Name and Phone Number are required.");
+      return;
+    }
+    createMemberMutation.mutate({
+      fullName: addFullName.trim(),
+      phoneNumber: addPhoneNumber.trim(),
+      email: addEmail.trim() ? addEmail.trim() : null,
+      role: addRoleVal,
+    });
   };
 
   // ── Web App Mutations ─────────────────────────
@@ -249,7 +341,17 @@ function Page() {
         </TabsList>
 
         {/* ── Tab 1: Approved Members ─────────────── */}
-        <TabsContent value="approved" className="mt-4">
+        <TabsContent value="approved" className="mt-4 space-y-4">
+          <div className="flex justify-between items-center">
+            <p className="text-sm text-muted-foreground">
+              {webUsers.length} active registered {webUsers.length === 1 ? "member" : "members"}.
+            </p>
+            <Button onClick={() => setAddMemberOpen(true)} className="gap-2">
+              <UserPlus className="h-4 w-4" />
+              Add Member
+            </Button>
+          </div>
+
           <Card>
             <Table>
               <TableHeader>
@@ -586,6 +688,84 @@ function Page() {
               Confirm Rejection
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* ── Add Member Dialog ──────────────────────── */}
+      <Dialog open={addMemberOpen} onOpenChange={setAddMemberOpen}>
+        <DialogContent className="sm:max-w-[480px]">
+          <form onSubmit={handleCreateMemberSubmit}>
+            <DialogHeader>
+              <DialogTitle>Add Member Manually</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="manual-full-name">Full Name *</Label>
+                <Input
+                  id="manual-full-name"
+                  placeholder="e.g. Jane Doe"
+                  value={addFullName}
+                  onChange={(e) => setAddFullName(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="manual-phone">Phone Number *</Label>
+                <Input
+                  id="manual-phone"
+                  placeholder="e.g. 0712345678"
+                  value={addPhoneNumber}
+                  onChange={(e) => setAddPhoneNumber(e.target.value)}
+                  required
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  e.g. 0712345678 · Used for WhatsApp/SMS bot
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="manual-email">Email (optional)</Label>
+                <Input
+                  id="manual-email"
+                  type="email"
+                  placeholder="e.g. member@example.com"
+                  value={addEmail}
+                  onChange={(e) => setAddEmail(e.target.value)}
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Leave blank if member has no email
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="manual-role">Role *</Label>
+                <Select value={addRoleVal} onValueChange={setAddRoleVal}>
+                  <SelectTrigger id="manual-role">
+                    <SelectValue placeholder="Select role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="member">Member</SelectItem>
+                    <SelectItem value="board_member">Board Member</SelectItem>
+                    <SelectItem value="secretary">Secretary</SelectItem>
+                    <SelectItem value="assistant_secretary">Assistant Secretary</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setAddMemberOpen(false)}
+                disabled={createMemberMutation.isPending}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={createMemberMutation.isPending}>
+                {createMemberMutation.isPending ? "Adding..." : "Add Member"}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

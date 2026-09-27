@@ -80,6 +80,8 @@ export type Database = {
           contributed_on: string;
           created_at: string;
           currency: string;
+          entered_by: string | null;
+          entered_by_role: string | null;
           id: string;
           member_id: string;
           method: string;
@@ -87,6 +89,7 @@ export type Database = {
           mpesa_sender_phone: string | null;
           mpesa_transaction_id: string | null;
           notes: string | null;
+          on_behalf_of: boolean | null;
           paybill_number: string | null;
           reference: string | null;
           status: string;
@@ -99,6 +102,8 @@ export type Database = {
           contributed_on?: string;
           created_at?: string;
           currency?: string;
+          entered_by?: string | null;
+          entered_by_role?: string | null;
           id?: string;
           member_id: string;
           method?: string;
@@ -106,6 +111,7 @@ export type Database = {
           mpesa_sender_phone?: string | null;
           mpesa_transaction_id?: string | null;
           notes?: string | null;
+          on_behalf_of?: boolean | null;
           paybill_number?: string | null;
           reference?: string | null;
           status?: string;
@@ -118,6 +124,8 @@ export type Database = {
           contributed_on?: string;
           created_at?: string;
           currency?: string;
+          entered_by?: string | null;
+          entered_by_role?: string | null;
           id?: string;
           member_id?: string;
           method?: string;
@@ -125,6 +133,7 @@ export type Database = {
           mpesa_sender_phone?: string | null;
           mpesa_transaction_id?: string | null;
           notes?: string | null;
+          on_behalf_of?: boolean | null;
           paybill_number?: string | null;
           reference?: string | null;
           status?: string;
@@ -325,11 +334,14 @@ export type Database = {
           created_at: string;
           decision_at: string | null;
           eligibility_note: string | null;
+          entered_by: string | null;
+          entered_by_role: string | null;
           forwarded_at: string | null;
           forwarded_by: string | null;
           id: string;
           loan_type: Database["public"]["Enums"]["loan_type"];
           member_id: string;
+          on_behalf_of: boolean | null;
           purpose: string;
           rejection_reason: string | null;
           repayment_months: number;
@@ -342,11 +354,14 @@ export type Database = {
           created_at?: string;
           decision_at?: string | null;
           eligibility_note?: string | null;
+          entered_by?: string | null;
+          entered_by_role?: string | null;
           forwarded_at?: string | null;
           forwarded_by?: string | null;
           id?: string;
           loan_type?: Database["public"]["Enums"]["loan_type"];
           member_id: string;
+          on_behalf_of?: boolean | null;
           purpose: string;
           rejection_reason?: string | null;
           repayment_months: number;
@@ -359,11 +374,14 @@ export type Database = {
           created_at?: string;
           decision_at?: string | null;
           eligibility_note?: string | null;
+          entered_by?: string | null;
+          entered_by_role?: string | null;
           forwarded_at?: string | null;
           forwarded_by?: string | null;
           id?: string;
           loan_type?: Database["public"]["Enums"]["loan_type"];
           member_id?: string;
+          on_behalf_of?: boolean | null;
           purpose?: string;
           rejection_reason?: string | null;
           repayment_months?: number;
