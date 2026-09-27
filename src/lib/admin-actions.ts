@@ -4,7 +4,8 @@ import type { Role } from "@/hooks/use-roles";
 type AdminAction =
   | { action: "approve_member"; userId: string; role: Role }
   | { action: "reject_member"; userId: string; reason?: string }
-  | { action: "approve_bot_registration"; registrationId: string };
+  | { action: "approve_bot_registration"; registrationId: string }
+  | { action: "reject_bot_registration"; registrationId: string; reason: string };
 
 export async function adminAction(body: AdminAction): Promise<void> {
   try {

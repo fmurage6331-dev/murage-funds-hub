@@ -144,8 +144,36 @@ Deno.serve(async (req: Request) => {
         if (cleanupError) console.error("Approval cleanup failed", cleanupError);
         throw error;
       }
+    } else if (body.action === "reject_bot_registration") {
+      if (!uuid(body.registrationId)) return json({ error: "Valid registrationId required" }, 400);
+      const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+      if (!reason || reason.length > 2000)
+        return json({ error: "A reason of 1-2000 characters is required" }, 400);
+      // Never trust client-supplied identity or actor: re-read the persisted registration.
+      const { data: reg, error } = await db
+        .from("pending_registrations")
+        .select("id, status")
+        .eq("id", body.registrationId)
+        .maybeSingle();
+      if (error) throw error;
+      if (!reg) return json({ error: "Registration not found" }, 404);
+      if (reg.status === "rejected") return json({ success: true });
+      if (reg.status !== "pending") return json({ error: "Registration is not pending" }, 409);
+      const { data: rejected, error: rejectError } = await db
+        .from("pending_registrations")
+        .update({
+          status: "rejected",
+          admin_notes: reason,
+          approved_by: auth.user.id,
+          approved_at: new Date().toISOString(),
+        })
+        .eq("id", body.registrationId)
+        .select("id")
+        .maybeSingle();
+      if (rejectError) throw rejectError;
+      if (!rejected) return json({ error: "Registration not found" }, 404);
     } else {
-      return json({ error: "Unsupported action" }, 400);
+      return json({ error: "Unknown action" }, 400);
     }
     return json({ success: true });
   } catch (error) {

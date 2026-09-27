@@ -130,6 +130,9 @@ test("invalid JSON, action, UUID and role fail before writes", async () => {
   ]) {
     assert.equal((await request(body)).status, 400);
   }
+  const unknown = await request({ action: "nope" });
+  assert.equal(unknown.status, 400);
+  assert.equal((await unknown.json()).error, "Unknown action");
   assert.equal(calls.length, 0);
 });
 test("member approval uses atomic RPC; rejection updates status", async () => {
@@ -184,4 +187,62 @@ test("failed finalization reports failure and cleans up the new Auth user", asyn
   assert.equal(calls.at(-1)[0], "delete");
   assert.equal(calls.at(-1)[1], "created-user");
   assert.equal((await response.json()).success, undefined);
+});
+test("bot rejection records the reason and the authenticated actor", async () => {
+  const { request, calls, registration } = setup({
+    registration: { email: "member@example.com" },
+  });
+  const response = await request({
+    action: "reject_bot_registration",
+    registrationId: registration.id,
+    reason: "  Duplicate registration  ",
+    approvedBy: "forged",
+  });
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).success, true);
+  const write = calls.find((call) => call[0] === "update");
+  assert.equal(write[1], "pending_registrations");
+  assert.equal(write[2].status, "rejected");
+  assert.equal(write[2].admin_notes, "Duplicate registration");
+  assert.equal(write[2].approved_by, "verified-admin");
+  assert.ok(write[2].approved_at);
+  assert.equal(
+    calls.some((call) => call[0] === "create" || call[0] === "invite"),
+    false,
+  );
+});
+test("bot rejection validates input and registration state before writing", async () => {
+  for (const [options, body, expected] of [
+    [{}, { action: "reject_bot_registration", registrationId: "bad", reason: "no" }, 400],
+    [{}, { action: "reject_bot_registration", registrationId: userId }, 400],
+    [{}, { action: "reject_bot_registration", registrationId: userId, reason: "   " }, 400],
+    [
+      {},
+      { action: "reject_bot_registration", registrationId: userId, reason: "x".repeat(2001) },
+      400,
+    ],
+    [
+      { registration: { status: "approved" } },
+      { action: "reject_bot_registration", registrationId: userId, reason: "no" },
+      409,
+    ],
+  ]) {
+    const { request, calls } = setup(options);
+    assert.equal(
+      (await request({ ...body, registrationId: body.registrationId ?? userId })).status,
+      expected,
+    );
+    assert.equal(calls.length, 0);
+  }
+});
+test("repeating a bot rejection is a no-op", async () => {
+  const { request, calls, registration } = setup({ registration: { status: "rejected" } });
+  const response = await request({
+    action: "reject_bot_registration",
+    registrationId: registration.id,
+    reason: "Already handled",
+  });
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).success, true);
+  assert.equal(calls.length, 0);
 });
