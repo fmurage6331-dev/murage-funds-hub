@@ -188,7 +188,7 @@ function Page() {
       adminAction({ action: "approve_bot_registration", registrationId: reg.id }),
     onSuccess: (_, reg) => {
       toast.success(
-        `${reg.full_name ?? "Member"} approved! ${reg.email ? "Magic link sent." : "Bot access granted."}`,
+        `${reg.full_name ?? "Member"} approved! ${reg.email ? "Invite email sent." : "Bot access granted."}`,
       );
       invalidateAll();
     },
@@ -196,20 +196,14 @@ function Page() {
   });
 
   const rejectBotRegistration = useMutation({
-    mutationFn: async ({ reg, reason }: { reg: PendingRegistration; reason: string }) => {
-      const { error } = await supabase
-        .from("pending_registrations")
-        .update({
-          status: "rejected",
-          admin_notes: reason,
-          approved_by: user.id,
-          approved_at: new Date().toISOString(),
-        })
-        .eq("id", reg.id);
-      if (error) throw error;
-    },
+    mutationFn: ({ reg, reason }: { reg: PendingRegistration; reason: string }) =>
+      adminAction({
+        action: "reject_bot_registration",
+        registrationId: reg.id,
+        reason: reason.trim(),
+      }),
     onSuccess: () => {
-      toast.success("Registration rejected and applicant notified.");
+      toast.success("Registration rejected.");
       setRejectTarget(null);
       setRejectReason("");
       invalidateAll();
