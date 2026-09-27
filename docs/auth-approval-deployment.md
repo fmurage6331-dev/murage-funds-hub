@@ -48,10 +48,10 @@ No remote database or Edge Function deployment was performed by the coding agent
 npm run lint
 npm run build
 npx tsc --noEmit
-node --test tests/admin-actions.test.mjs
+npm test
 ```
 
-The handler tests mock the Supabase boundary; they do not replace deployed database/trigger, email-delivery and Auth tests.
+The handler tests mock the Supabase and Resend boundaries; they do not replace deployed database/trigger, email-delivery and Auth tests. `tests/admin-actions.test.mjs` covers the approval/rejection handler, `tests/send-email.test.mjs` covers the `password_reset` template (escaping, unsafe-link rejection and the no-API-key simulation path).
 
 After deployment, verify:
 
