@@ -30,10 +30,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Check, X, PlusCircle, Search } from "lucide-react";
+import { Check, X, PlusCircle, Search, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { useRoles } from "@/hooks/use-roles";
 import { notifyContributionReview } from "@/lib/notifications";
+import { ContributionImportPanel } from "@/components/contributions/ContributionImportPanel";
 import { useState, useMemo } from "react";
 
 export const Route = createFileRoute("/_authenticated/contributions-review")({
@@ -61,6 +62,7 @@ function Page() {
   const [contribDate, setContribDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [paymentMethod, setPaymentMethod] = useState("mpesa");
   const [notes, setNotes] = useState("");
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
 
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["contribs", "all"],
@@ -101,6 +103,12 @@ function Page() {
   }, [approvedMembers, memberSearch]);
 
   const currentRole = r.isAdmin ? "admin" : r.isTreasurer ? "treasurer" : "officer";
+
+  // References already on record, used to skip duplicate M-Pesa refs on import
+  const existingRefs = useMemo(
+    () => rows.map((row) => row.reference ?? "").filter((ref) => ref !== ""),
+    [rows],
+  );
 
   const logOnBehalfMutation = useMutation({
     mutationFn: async () => {
@@ -204,12 +212,20 @@ function Page() {
           <h2 className="font-serif text-2xl font-semibold text-primary">Contributions Review</h2>
           <p className="text-sm text-muted-foreground">{pending.length} pending confirmation.</p>
         </div>
-        {r.canConfirmContribs && (
-          <Button onClick={() => setLogDialogOpen(true)} className="gap-2">
-            <PlusCircle className="h-4 w-4" />
-            Log Contribution for Member
-          </Button>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {r.isAdmin && (
+            <Button variant="outline" onClick={() => setImportDialogOpen(true)} className="gap-2">
+              <Upload className="h-4 w-4" />
+              Bulk Import CSV
+            </Button>
+          )}
+          {r.canConfirmContribs && (
+            <Button onClick={() => setLogDialogOpen(true)} className="gap-2">
+              <PlusCircle className="h-4 w-4" />
+              Log Contribution for Member
+            </Button>
+          )}
+        </div>
       </div>
       <Card>
         <Table>
@@ -422,6 +438,30 @@ function Page() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Bulk Import CSV Dialog (admin only) ───────── */}
+      <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+        <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Bulk Import Contributions from CSV</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Import previously recorded contributions as confirmed officer entries. Downloaded
+            template, validate the preview, then import the valid rows.
+          </p>
+          <ContributionImportPanel
+            members={approvedMembers}
+            existingRefs={existingRefs}
+            officerId={user.id}
+            officerRole={currentRole}
+          />
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setImportDialogOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
