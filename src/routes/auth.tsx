@@ -1,3 +1,4 @@
+import { fetchProfileStatus } from "@/lib/profile-status";
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -22,19 +23,45 @@ function AuthPage() {
   const [consentGiven, setConsentGiven] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) navigate({ to: "/my-contributions", replace: true });
-    });
+    let active = true;
+    const checkSession = async () => {
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        if (error) throw error;
+        if (!data.session) return;
+        const profile = await fetchProfileStatus(data.session.user.id);
+        if (active)
+          await navigate({
+            to: profile.status === "approved" ? "/dashboard" : "/pending-approval",
+            replace: true,
+          });
+      } catch {
+        if (active) toast.error("Unable to check your session. Please sign in again.");
+      }
+    };
+    void checkSession();
+    return () => {
+      active = false;
+    };
   }, [navigate]);
 
   const signIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
-    if (error) return toast.error(error.message);
-    toast.success("Welcome back");
-    navigate({ to: "/my-contributions", replace: true });
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      const profile = await fetchProfileStatus(data.user.id);
+      toast.success("Welcome back");
+      await navigate({
+        to: profile.status === "approved" ? "/dashboard" : "/pending-approval",
+        replace: true,
+      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to sign in. Please retry.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const signUp = async (e: React.FormEvent) => {
@@ -45,21 +72,28 @@ function AuthPage() {
       );
     }
     setLoading(true);
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/my-contributions`,
-        data: {
-          full_name: fullName,
-          consent_given: true,
-          consent_version: "1.0",
+    try {
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/my-contributions`,
+          data: {
+            full_name: fullName,
+            consent_given: true,
+            consent_version: "1.0",
+          },
         },
-      },
-    });
-    setLoading(false);
-    if (error) return toast.error(error.message);
-    toast.success("Account created. You can sign in now.");
+      });
+      if (error) throw error;
+      toast.success("Account created. You can sign in now.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Unable to create account. Please retry.",
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

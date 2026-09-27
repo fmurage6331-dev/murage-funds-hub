@@ -1,3 +1,6 @@
+import { toast } from "sonner";
+import { useEffect } from "react";
+import { fetchProfileStatus, profileStatusOptions } from "@/lib/profile-status";
 import {
   createFileRoute,
   Outlet,
@@ -7,7 +10,7 @@ import {
   useRouterState,
 } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Sidebar,
   SidebarContent,
@@ -46,11 +49,7 @@ export const Route = createFileRoute("/_authenticated")({
     const { data } = await supabase.auth.getUser();
     if (!data.user) throw redirect({ to: "/auth" });
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("status")
-      .eq("id", data.user.id)
-      .single();
+    const profile = await fetchProfileStatus(data.user.id);
 
     if (profile?.status !== "approved") throw redirect({ to: "/pending-approval" });
 
@@ -65,12 +64,23 @@ function AuthedLayout() {
   const qc = useQueryClient();
   const path = useRouterState({ select: (s) => s.location.pathname });
   const r = useRoles(user.id);
+  const { data: profile, error: statusError } = useQuery(profileStatusOptions(user.id));
+  useEffect(() => {
+    if (profile && profile.status !== "approved") {
+      void navigate({ to: "/pending-approval", replace: true });
+    }
+  }, [profile, navigate]);
 
   const signOut = async () => {
-    await qc.cancelQueries();
-    qc.clear();
-    await supabase.auth.signOut();
-    navigate({ to: "/auth", replace: true });
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      await qc.cancelQueries();
+      qc.clear();
+      await navigate({ to: "/auth", replace: true });
+    } catch {
+      toast.error("Unable to sign out. Please retry.");
+    }
   };
 
   type Item = { title: string; url: string; icon: typeof LayoutDashboard };
@@ -222,7 +232,13 @@ function AuthedLayout() {
             </div>
           </header>
           <main className="flex-1 bg-background p-6">
-            <Outlet />
+            {statusError ? (
+              <p role="alert">Unable to verify membership. Please retry.</p>
+            ) : profile?.status === "approved" ? (
+              <Outlet />
+            ) : (
+              <p>Checking membership…</p>
+            )}
           </main>
         </div>
       </div>
