@@ -186,10 +186,11 @@ function Page() {
   const approveBotRegistration = useMutation({
     mutationFn: (reg: PendingRegistration) =>
       adminAction({ action: "approve_bot_registration", registrationId: reg.id }),
-    onSuccess: (_, reg) => {
+    onSuccess: (result, reg) => {
       toast.success(
-        `${reg.full_name ?? "Member"} approved! ${reg.email ? "Invite email sent." : "Bot access granted."}`,
+        `${reg.full_name ?? "Member"} approved! ${reg.email ? "Password reset email sent." : "Bot access granted."}`,
       );
+      if (result.warning) toast.warning(result.warning);
       invalidateAll();
     },
     onError: (e: Error) => toast.error(e.message),

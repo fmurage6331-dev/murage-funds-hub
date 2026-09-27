@@ -31,7 +31,7 @@ const cors = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
-const json = (body: { success: true } | { error: string }, status = 200) =>
+const json = (body: { success: true; warning?: string } | { error: string }, status = 200) =>
   new Response(JSON.stringify(body), {
     status,
     headers: { ...cors, "Content-Type": "application/json" },
@@ -39,6 +39,33 @@ const json = (body: { success: true } | { error: string }, status = 200) =>
 const uuid = (value: unknown): value is string =>
   typeof value === "string" &&
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+
+// Best-effort delivery through the send-email function. Never logs the recovery link itself.
+const dispatchEmail = async (payload: {
+  to: string;
+  subject: string;
+  template: string;
+  data: Record<string, unknown>;
+}): Promise<boolean> => {
+  const baseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!baseUrl || !serviceKey) return false;
+  try {
+    const response = await fetch(`${baseUrl}/functions/v1/send-email`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${serviceKey}`,
+        apikey: serviceKey,
+      },
+      body: JSON.stringify(payload),
+    });
+    return response.ok;
+  } catch (error) {
+    console.error("Email dispatch failed", error);
+    return false;
+  }
+};
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
@@ -72,6 +99,8 @@ Deno.serve(async (req: Request) => {
     } catch {
       return json({ error: "Invalid JSON body" }, 400);
     }
+    // Surface non-fatal delivery problems without failing an already committed approval.
+    let warning: string | undefined;
     if (body.action === "approve_member" || body.action === "reject_member") {
       if (!uuid(body.userId)) return json({ error: "Valid userId required" }, 400);
       if (
@@ -113,15 +142,37 @@ Deno.serve(async (req: Request) => {
         return json({ error: "Invalid requested role" }, 400);
       // Both profiles and user_roles reference auth.users, including phone-only members.
       const metadata = { full_name: reg.full_name, phone_number: reg.phone_number };
-      const created = reg.email
-        ? await db.auth.admin.inviteUserByEmail(reg.email, { data: metadata })
-        : await db.auth.admin.createUser({
-            phone: reg.phone_number,
-            phone_confirm: false,
-            user_metadata: metadata,
-          });
+      // Email confirmation is disabled project-wide: create the Auth user already confirmed with
+      // an unusable random password, then let the member choose their own via a recovery link.
+      const created = await db.auth.admin.createUser(
+        reg.email
+          ? {
+              email: reg.email,
+              password: crypto.randomUUID(),
+              email_confirm: true,
+              user_metadata: metadata,
+            }
+          : {
+              phone: reg.phone_number,
+              phone_confirm: false,
+              user_metadata: metadata,
+            },
+      );
       if (created.error) return json({ error: created.error.message }, 409);
       const memberId = created.data.user.id;
+      // A recovery link lets the member SET a password instead of CONFIRMING an email address.
+      let resetLink: string | null = null;
+      if (reg.email) {
+        const link = await db.auth.admin.generateLink({ type: "recovery", email: reg.email });
+        const actionLink = link.data?.properties?.action_link;
+        if (link.error || !actionLink) {
+          const { error: cleanupError } = await db.auth.admin.deleteUser(memberId);
+          if (cleanupError) console.error("Approval cleanup failed", cleanupError);
+          console.error("Password reset link creation failed", link.error?.message);
+          return json({ error: "Unable to create a password reset link for this member" }, 502);
+        }
+        resetLink = actionLink;
+      }
       try {
         const { error: profileError } = await db.from("profiles").upsert({
           id: memberId,
@@ -143,6 +194,17 @@ Deno.serve(async (req: Request) => {
         const { error: cleanupError } = await db.auth.admin.deleteUser(memberId);
         if (cleanupError) console.error("Approval cleanup failed", cleanupError);
         throw error;
+      }
+      // Delivery is best-effort: the approval is already committed, so report rather than roll back.
+      if (reg.email && resetLink) {
+        const sent = await dispatchEmail({
+          to: reg.email,
+          subject: "Murage Foundation — set your password to sign in",
+          template: "password_reset",
+          data: { memberName: reg.full_name, resetLink },
+        });
+        if (!sent)
+          warning = `Approved, but the password reset email to ${reg.email} did not send. Resend it from Supabase Auth → Users.`;
       }
     } else if (body.action === "reject_bot_registration") {
       if (!uuid(body.registrationId)) return json({ error: "Valid registrationId required" }, 400);
@@ -175,7 +237,7 @@ Deno.serve(async (req: Request) => {
     } else {
       return json({ error: "Unknown action" }, 400);
     }
-    return json({ success: true });
+    return json(warning ? { success: true, warning } : { success: true });
   } catch (error) {
     console.error("Admin action failed", error);
     return json(

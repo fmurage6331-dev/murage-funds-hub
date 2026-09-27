@@ -12,6 +12,8 @@ const source = readFileSync(
 const compiled = ts.transpileModule(source.replace(/^import .*createClient.*\n/m, ""), {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
 }).outputText;
+const RESET_LINK =
+  "https://project.supabase.co/auth/v1/verify?token=recovery-token&type=recovery&redirect_to=https%3A%2F%2Fapp";
 function setup(options = {}) {
   let handler;
   const calls = [];
@@ -31,13 +33,17 @@ function setup(options = {}) {
         error: null,
       }),
       admin: {
+        // inviteUserByEmail is intentionally absent: email confirmation is disabled, so any
+        // invitation call would throw and fail the test instead of silently passing.
         createUser: async (args) => {
           calls.push(["create", args]);
           return { data: { user: { id: "created-user" } }, error: null };
         },
-        inviteUserByEmail: async (...args) => {
-          calls.push(["invite", ...args]);
-          return { data: { user: { id: "created-user" } }, error: null };
+        generateLink: async (args) => {
+          calls.push(["link", args]);
+          return options.linkFailure
+            ? { data: null, error: { message: "recovery link unavailable" } }
+            : { data: { properties: { action_link: RESET_LINK } }, error: null };
         },
         deleteUser: async (id) => {
           calls.push(["delete", id]);
@@ -81,6 +87,11 @@ function setup(options = {}) {
     Request,
     Response,
     console: { error() {} },
+    crypto: globalThis.crypto,
+    fetch: async (url, init) => {
+      calls.push(["email", url, JSON.parse(init.body)]);
+      return { ok: !options.emailFailure };
+    },
     createClient: () => db,
     Deno: {
       env: { get: () => "test" },
@@ -155,13 +166,90 @@ test("bot approvals use persisted identity/role and authenticated actor", async 
       email: "forged",
     });
     assert.equal(response.status, 200);
-    assert.equal(calls[0][0], email ? "invite" : "create");
-    if (!email) assert.equal(calls[0][1].phone, registration.phone_number);
-    else assert.equal(calls[0][1], email);
-    assert.equal(calls[1][2].phone_only_member, !email);
-    assert.equal(calls[2][2].assigned_role, "member");
-    assert.equal(calls[2][2].actor_id, "verified-admin");
+    // Email confirmation is disabled: every approval creates an Auth user, never an invitation.
+    const create = calls.find((call) => call[0] === "create");
+    assert.equal(create[1].user_metadata.phone_number, registration.phone_number);
+    assert.equal(create[1].user_metadata.full_name, registration.full_name);
+    if (!email) {
+      assert.equal(create[1].phone, registration.phone_number);
+      assert.equal(create[1].email_confirm, undefined);
+      assert.equal(
+        calls.some((call) => call[0] === "link" || call[0] === "email"),
+        false,
+      );
+    } else {
+      assert.equal(create[1].email, email);
+      assert.equal(create[1].email_confirm, true);
+      assert.match(
+        create[1].password,
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+      );
+      const link = calls.find((call) => call[0] === "link");
+      assert.equal(link[1].type, "recovery");
+      assert.equal(link[1].email, email);
+    }
+    const upsert = calls.find((call) => call[0] === "upsert");
+    assert.equal(upsert[2].phone_only_member, !email);
+    const rpc = calls.find((call) => call[0] === "rpc");
+    assert.equal(rpc[2].assigned_role, "member");
+    assert.equal(rpc[2].actor_id, "verified-admin");
   }
+});
+test("email approval sends the recovery link, never the temporary password", async () => {
+  const { request, calls, registration } = setup({
+    registration: { email: "member@example.com" },
+  });
+  const response = await request({
+    action: "approve_bot_registration",
+    registrationId: registration.id,
+  });
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.success, true);
+  assert.equal(body.warning, undefined);
+  const sent = calls.find((call) => call[0] === "email");
+  assert.match(sent[1], /\/functions\/v1\/send-email$/);
+  assert.equal(sent[2].to, registration.email);
+  assert.equal(sent[2].template, "password_reset");
+  assert.equal(sent[2].data.resetLink, RESET_LINK);
+  assert.equal(sent[2].data.memberName, registration.full_name);
+  const temporaryPassword = calls.find((call) => call[0] === "create")[1].password;
+  assert.equal(JSON.stringify(sent[2]).includes(temporaryPassword), false);
+  // The email goes out only after the approval transaction has committed.
+  assert.ok(calls.findIndex((call) => call[0] === "rpc") < calls.indexOf(sent));
+});
+test("a failed recovery link rolls the new Auth user back instead of stranding them", async () => {
+  const { request, calls, registration } = setup({
+    registration: { email: "member@example.com" },
+    linkFailure: true,
+  });
+  const response = await request({
+    action: "approve_bot_registration",
+    registrationId: registration.id,
+  });
+  assert.equal(response.status, 502);
+  assert.equal((await response.json()).success, undefined);
+  assert.equal(calls.at(-1)[0], "delete");
+  assert.equal(calls.at(-1)[1], "created-user");
+  assert.equal(
+    calls.some((call) => call[0] === "rpc" || call[0] === "upsert" || call[0] === "email"),
+    false,
+  );
+});
+test("an undeliverable reset email still approves and warns the admin", async () => {
+  const { request, calls, registration } = setup({
+    registration: { email: "member@example.com" },
+    emailFailure: true,
+  });
+  const response = await request({
+    action: "approve_bot_registration",
+    registrationId: registration.id,
+  });
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.success, true);
+  assert.match(body.warning, /did not send/);
+  assert.ok(calls.some((call) => call[0] === "rpc"));
 });
 test("already approved is idempotent; rejected cannot be approved", async () => {
   for (const [status, expected] of [
@@ -207,7 +295,7 @@ test("bot rejection records the reason and the authenticated actor", async () =>
   assert.equal(write[2].approved_by, "verified-admin");
   assert.ok(write[2].approved_at);
   assert.equal(
-    calls.some((call) => call[0] === "create" || call[0] === "invite"),
+    calls.some((call) => call[0] === "create" || call[0] === "link"),
     false,
   );
 });

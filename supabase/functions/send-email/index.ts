@@ -15,8 +15,19 @@ const corsHeaders = {
 interface EmailNotificationPayload {
   to: string | string[];
   subject: string;
-  template: "loan_status_changed" | "contribution_reviewed" | "meeting_scheduled";
+  template:
+    "loan_status_changed" | "contribution_reviewed" | "meeting_scheduled" | "password_reset";
   data: Record<string, any>;
+}
+
+// Member-supplied values (names) and generated links are escaped before hitting the HTML body.
+function escapeHtml(value: unknown): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function generateHtmlEmail(template: string, data: Record<string, any>): string {
@@ -95,6 +106,30 @@ function generateHtmlEmail(template: string, data: Record<string, any>): string 
           ${agenda ? `<p style="margin: 0; color: #374151;"><strong>Agenda:</strong><br/>${agenda.replace(/\n/g, "<br/>")}</p>` : ""}
         </div>
         <p>Your attendance and prompt participation are highly appreciated.</p>
+      `;
+      break;
+    }
+
+    case "password_reset": {
+      const memberName = escapeHtml(data.memberName);
+      const adminContact = escapeHtml(data.adminContact || "+254182528510");
+      const rawLink = data.resetLink;
+      const safeLink =
+        typeof rawLink === "string" && /^https:\/\/\S+$/i.test(rawLink) ? escapeHtml(rawLink) : "";
+
+      contentHtml = `
+        <h2 style="color: ${brandColor}; margin-top: 0;">Your Murage Foundation Account Is Ready</h2>
+        <p>Dear ${memberName || "Member"},</p>
+        <p>An administrator has approved your membership. Set your own password to sign in to the Murage Funds Hub — there is no email verification step.</p>
+        <div style="background-color: #f9fafb; border-left: 4px solid #16a34a; padding: 16px; margin: 20px 0; border-radius: 4px; text-align: center;">
+          ${
+            safeLink
+              ? `<a href="${safeLink}" style="display: inline-block; background-color: ${brandColor}; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-weight: 600;">Set my password</a>
+          <p style="margin: 12px 0 0 0; font-size: 12px; color: #6b7280; word-break: break-all;">Or copy this link into your browser:<br/>${safeLink}</p>`
+              : `<p style="margin: 0; color: #dc2626;">We could not generate a password reset link. Please contact the administrator on ${adminContact}.</p>`
+          }
+        </div>
+        <p style="font-size: 13px; color: #6b7280;">This link expires shortly after it is issued. If it no longer works, ask the administrator on ${adminContact} to send a new one.</p>
       `;
       break;
     }

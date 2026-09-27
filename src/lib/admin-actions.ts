@@ -7,7 +7,7 @@ type AdminAction =
   | { action: "approve_bot_registration"; registrationId: string }
   | { action: "reject_bot_registration"; registrationId: string; reason: string };
 
-export async function adminAction(body: AdminAction): Promise<void> {
+export async function adminAction(body: AdminAction): Promise<{ warning?: string }> {
   try {
     const {
       data: { session },
@@ -26,9 +26,11 @@ export async function adminAction(body: AdminAction): Promise<void> {
         body: JSON.stringify(body),
       },
     );
-    const result: { success?: boolean; error?: string } = await response.json();
+    const result: { success?: boolean; error?: string; warning?: string } = await response.json();
     if (!response.ok || result.success !== true)
       throw new Error(result.error || "Admin action failed.");
+    // Non-fatal delivery problems (e.g. a password reset email that did not send).
+    return { warning: result.warning };
   } catch (error) {
     throw new Error(error instanceof Error ? error.message : "Admin action failed. Please retry.");
   }
