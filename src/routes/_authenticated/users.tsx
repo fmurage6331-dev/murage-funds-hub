@@ -41,6 +41,7 @@ import {
   Smartphone,
   Phone,
   Mail,
+  UserCircle,
   UserPlus,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -398,6 +399,13 @@ function Page() {
                               {u.phone_number}
                             </div>
                           )}
+                          <Link
+                            to="/member-profile/$memberId"
+                            params={{ memberId: u.id }}
+                            className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                          >
+                            <UserCircle className="h-3.5 w-3.5" /> View Profile
+                          </Link>
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-wrap gap-1">

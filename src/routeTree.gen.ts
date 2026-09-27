@@ -22,10 +22,12 @@ import { Route as AuthenticatedLoanRulesRouteImport } from './routes/_authentica
 import { Route as AuthenticatedLoanVotesRouteImport } from './routes/_authenticated/loan-votes'
 import { Route as AuthenticatedLoansReviewRouteImport } from './routes/_authenticated/loans-review'
 import { Route as AuthenticatedMeetingsRouteImport } from './routes/_authenticated/meetings'
+import { Route as AuthenticatedMemberProfileRouteImport } from './routes/_authenticated/member-profile'
 import { Route as AuthenticatedMyContributionsRouteImport } from './routes/_authenticated/my-contributions'
 import { Route as AuthenticatedMyLoansRouteImport } from './routes/_authenticated/my-loans'
 import { Route as AuthenticatedTransactionsRouteImport } from './routes/_authenticated/transactions'
 import { Route as AuthenticatedUsersRouteImport } from './routes/_authenticated/users'
+import { Route as AuthenticatedMemberProfileMemberIdRouteImport } from './routes/_authenticated/member-profile.$memberId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -94,6 +96,12 @@ const AuthenticatedMeetingsRoute = AuthenticatedMeetingsRouteImport.update({
   path: '/meetings',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedMemberProfileRoute =
+  AuthenticatedMemberProfileRouteImport.update({
+    id: '/member-profile',
+    path: '/member-profile',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedMyContributionsRoute =
   AuthenticatedMyContributionsRouteImport.update({
     id: '/my-contributions',
@@ -116,6 +124,12 @@ const AuthenticatedUsersRoute = AuthenticatedUsersRouteImport.update({
   path: '/users',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedMemberProfileMemberIdRoute =
+  AuthenticatedMemberProfileMemberIdRouteImport.update({
+    id: '/$memberId',
+    path: '/$memberId',
+    getParentRoute: () => AuthenticatedMemberProfileRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -130,10 +144,12 @@ export interface FileRoutesByFullPath {
   '/loan-votes': typeof AuthenticatedLoanVotesRoute
   '/loans-review': typeof AuthenticatedLoansReviewRoute
   '/meetings': typeof AuthenticatedMeetingsRoute
+  '/member-profile': typeof AuthenticatedMemberProfileRouteWithChildren
   '/my-contributions': typeof AuthenticatedMyContributionsRoute
   '/my-loans': typeof AuthenticatedMyLoansRoute
   '/transactions': typeof AuthenticatedTransactionsRoute
   '/users': typeof AuthenticatedUsersRoute
+  '/member-profile/$memberId': typeof AuthenticatedMemberProfileMemberIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -148,10 +164,12 @@ export interface FileRoutesByTo {
   '/loan-votes': typeof AuthenticatedLoanVotesRoute
   '/loans-review': typeof AuthenticatedLoansReviewRoute
   '/meetings': typeof AuthenticatedMeetingsRoute
+  '/member-profile': typeof AuthenticatedMemberProfileRouteWithChildren
   '/my-contributions': typeof AuthenticatedMyContributionsRoute
   '/my-loans': typeof AuthenticatedMyLoansRoute
   '/transactions': typeof AuthenticatedTransactionsRoute
   '/users': typeof AuthenticatedUsersRoute
+  '/member-profile/$memberId': typeof AuthenticatedMemberProfileMemberIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -168,10 +186,12 @@ export interface FileRoutesById {
   '/_authenticated/loan-votes': typeof AuthenticatedLoanVotesRoute
   '/_authenticated/loans-review': typeof AuthenticatedLoansReviewRoute
   '/_authenticated/meetings': typeof AuthenticatedMeetingsRoute
+  '/_authenticated/member-profile': typeof AuthenticatedMemberProfileRouteWithChildren
   '/_authenticated/my-contributions': typeof AuthenticatedMyContributionsRoute
   '/_authenticated/my-loans': typeof AuthenticatedMyLoansRoute
   '/_authenticated/transactions': typeof AuthenticatedTransactionsRoute
   '/_authenticated/users': typeof AuthenticatedUsersRoute
+  '/_authenticated/member-profile/$memberId': typeof AuthenticatedMemberProfileMemberIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -188,10 +208,12 @@ export interface FileRouteTypes {
     | '/loan-votes'
     | '/loans-review'
     | '/meetings'
+    | '/member-profile'
     | '/my-contributions'
     | '/my-loans'
     | '/transactions'
     | '/users'
+    | '/member-profile/$memberId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -206,10 +228,12 @@ export interface FileRouteTypes {
     | '/loan-votes'
     | '/loans-review'
     | '/meetings'
+    | '/member-profile'
     | '/my-contributions'
     | '/my-loans'
     | '/transactions'
     | '/users'
+    | '/member-profile/$memberId'
   id:
     | '__root__'
     | '/'
@@ -225,10 +249,12 @@ export interface FileRouteTypes {
     | '/_authenticated/loan-votes'
     | '/_authenticated/loans-review'
     | '/_authenticated/meetings'
+    | '/_authenticated/member-profile'
     | '/_authenticated/my-contributions'
     | '/_authenticated/my-loans'
     | '/_authenticated/transactions'
     | '/_authenticated/users'
+    | '/_authenticated/member-profile/$memberId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -331,6 +357,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMeetingsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/member-profile': {
+      id: '/_authenticated/member-profile'
+      path: '/member-profile'
+      fullPath: '/member-profile'
+      preLoaderRoute: typeof AuthenticatedMemberProfileRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/my-contributions': {
       id: '/_authenticated/my-contributions'
       path: '/my-contributions'
@@ -359,8 +392,30 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedUsersRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/member-profile/$memberId': {
+      id: '/_authenticated/member-profile/$memberId'
+      path: '/$memberId'
+      fullPath: '/member-profile/$memberId'
+      preLoaderRoute: typeof AuthenticatedMemberProfileMemberIdRouteImport
+      parentRoute: typeof AuthenticatedMemberProfileRoute
+    }
   }
 }
+
+interface AuthenticatedMemberProfileRouteChildren {
+  AuthenticatedMemberProfileMemberIdRoute: typeof AuthenticatedMemberProfileMemberIdRoute
+}
+
+const AuthenticatedMemberProfileRouteChildren: AuthenticatedMemberProfileRouteChildren =
+  {
+    AuthenticatedMemberProfileMemberIdRoute:
+      AuthenticatedMemberProfileMemberIdRoute,
+  }
+
+const AuthenticatedMemberProfileRouteWithChildren =
+  AuthenticatedMemberProfileRoute._addFileChildren(
+    AuthenticatedMemberProfileRouteChildren,
+  )
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAuditLogsRoute: typeof AuthenticatedAuditLogsRoute
@@ -372,6 +427,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedLoanVotesRoute: typeof AuthenticatedLoanVotesRoute
   AuthenticatedLoansReviewRoute: typeof AuthenticatedLoansReviewRoute
   AuthenticatedMeetingsRoute: typeof AuthenticatedMeetingsRoute
+  AuthenticatedMemberProfileRoute: typeof AuthenticatedMemberProfileRouteWithChildren
   AuthenticatedMyContributionsRoute: typeof AuthenticatedMyContributionsRoute
   AuthenticatedMyLoansRoute: typeof AuthenticatedMyLoansRoute
   AuthenticatedTransactionsRoute: typeof AuthenticatedTransactionsRoute
@@ -388,6 +444,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedLoanVotesRoute: AuthenticatedLoanVotesRoute,
   AuthenticatedLoansReviewRoute: AuthenticatedLoansReviewRoute,
   AuthenticatedMeetingsRoute: AuthenticatedMeetingsRoute,
+  AuthenticatedMemberProfileRoute: AuthenticatedMemberProfileRouteWithChildren,
   AuthenticatedMyContributionsRoute: AuthenticatedMyContributionsRoute,
   AuthenticatedMyLoansRoute: AuthenticatedMyLoansRoute,
   AuthenticatedTransactionsRoute: AuthenticatedTransactionsRoute,
