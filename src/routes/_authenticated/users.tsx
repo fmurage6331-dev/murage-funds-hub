@@ -1,3 +1,4 @@
+import { adminAction } from "@/lib/admin-actions";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -139,20 +140,8 @@ function Page() {
 
   // ── Web App Mutations ─────────────────────────
   const approveUser = useMutation({
-    mutationFn: async (userId: string) => {
-      const { error: profErr } = await supabase
-        .from("profiles")
-        .update({ status: "approved" })
-        .eq("id", userId);
-      if (profErr) throw profErr;
-      const { error: roleErr } = await supabase
-        .from("user_roles")
-        .upsert(
-          { user_id: userId, role: "member" },
-          { onConflict: "user_id,role", ignoreDuplicates: true },
-        );
-      if (roleErr) throw roleErr;
-    },
+    mutationFn: (userId: string) =>
+      adminAction({ action: "approve_member", userId, role: "member" }),
     onSuccess: () => {
       toast.success("Member approved");
       invalidateAll();
@@ -161,13 +150,7 @@ function Page() {
   });
 
   const rejectUser = useMutation({
-    mutationFn: async (userId: string) => {
-      const { error } = await supabase
-        .from("profiles")
-        .update({ status: "rejected" })
-        .eq("id", userId);
-      if (error) throw error;
-    },
+    mutationFn: (userId: string) => adminAction({ action: "reject_member", userId }),
     onSuccess: () => {
       toast.success("Signup rejected");
       invalidateAll();
@@ -201,72 +184,8 @@ function Page() {
 
   // ── Bot Registration Mutations ────────────────
   const approveBotRegistration = useMutation({
-    mutationFn: async (reg: PendingRegistration) => {
-      // Update pending_registrations status
-      const { error: regErr } = await supabase
-        .from("pending_registrations")
-        .update({
-          status: "approved",
-          approved_by: user.id,
-          approved_at: new Date().toISOString(),
-          invite_sent: true,
-          invite_sent_at: new Date().toISOString(),
-        })
-        .eq("id", reg.id);
-      if (regErr) throw regErr;
-
-      if (reg.email) {
-        // Full member — create profile and send magic link
-        const { data: authData, error: authErr } = await supabase.auth.admin.inviteUserByEmail(
-          reg.email,
-          {
-            data: {
-              full_name: reg.full_name,
-              phone_number: reg.phone_number,
-            },
-          },
-        );
-        if (authErr) throw authErr;
-
-        if (authData?.user) {
-          // Create profile
-          await supabase.from("profiles").upsert({
-            id: authData.user.id,
-            full_name: reg.full_name,
-            email: reg.email,
-            phone_number: reg.phone_number,
-            status: "approved",
-            phone_only_member: false,
-            whatsapp_opt_in: true,
-            consent_given: true,
-            consent_timestamp: new Date().toISOString(),
-            data_retention_until: new Date(
-              Date.now() + 7 * 365 * 24 * 60 * 60 * 1000,
-            ).toISOString(),
-          });
-
-          // Assign role
-          await supabase.from("user_roles").insert({
-            user_id: authData.user.id,
-            role: reg.requested_role as Role,
-          });
-        }
-      } else {
-        // Phone only member — create profile without auth user
-        await supabase.from("profiles").insert({
-          id: crypto.randomUUID(),
-          full_name: reg.full_name,
-          email: null,
-          phone_number: reg.phone_number,
-          status: "approved",
-          phone_only_member: true,
-          whatsapp_opt_in: true,
-          consent_given: true,
-          consent_timestamp: new Date().toISOString(),
-          data_retention_until: new Date(Date.now() + 7 * 365 * 24 * 60 * 60 * 1000).toISOString(),
-        });
-      }
-    },
+    mutationFn: (reg: PendingRegistration) =>
+      adminAction({ action: "approve_bot_registration", registrationId: reg.id }),
     onSuccess: (_, reg) => {
       toast.success(
         `${reg.full_name ?? "Member"} approved! ${reg.email ? "Magic link sent." : "Bot access granted."}`,
@@ -524,7 +443,7 @@ function Page() {
                     Paybill: <span className="font-bold text-sm">522522</span>
                   </p>
                   <p>
-                    Account: <span className="font-bold text-sm">798164</span>
+                    Account: <span className="font-bold text-sm">7989164</span>
                   </p>
                 </div>
               </div>

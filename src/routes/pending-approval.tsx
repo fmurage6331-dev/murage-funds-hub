@@ -1,3 +1,7 @@
+import { useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { fetchProfileStatus, profileStatusOptions } from "@/lib/profile-status";
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -10,13 +14,9 @@ export const Route = createFileRoute("/pending-approval")({
     const { data } = await supabase.auth.getUser();
     if (!data.user) throw redirect({ to: "/auth" });
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("status")
-      .eq("id", data.user.id)
-      .single();
+    const profile = await fetchProfileStatus(data.user.id);
 
-    if (profile?.status === "approved") throw redirect({ to: "/" });
+    if (profile?.status === "approved") throw redirect({ to: "/dashboard" });
 
     return { user: data.user, status: profile?.status ?? "pending" };
   },
@@ -24,15 +24,28 @@ export const Route = createFileRoute("/pending-approval")({
 });
 
 function PendingApprovalPage() {
-  const { status } = Route.useRouteContext();
+  const { user, status } = Route.useRouteContext();
+  const qc = useQueryClient();
+  const { data: profile, error } = useQuery(profileStatusOptions(user.id));
   const navigate = useNavigate();
 
+  useEffect(() => {
+    if (profile?.status === "approved") void navigate({ to: "/dashboard", replace: true });
+  }, [profile, navigate]);
+
   const signOut = async () => {
-    await supabase.auth.signOut();
-    navigate({ to: "/auth", replace: true });
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      await qc.cancelQueries();
+      qc.clear();
+      await navigate({ to: "/auth", replace: true });
+    } catch {
+      toast.error("Unable to sign out. Please retry.");
+    }
   };
 
-  const rejected = status === "rejected";
+  const rejected = (profile?.status ?? status) === "rejected";
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -63,6 +76,29 @@ function PendingApprovalPage() {
           )}
         </div>
 
+        <div className="mt-6 space-y-3 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
+          <p className="font-semibold">KCB Bank Kenya · M-Pesa Paybill</p>
+          <p>
+            Paybill: <strong>522522</strong>
+            <br />
+            Account: <strong>7989164</strong>
+          </p>
+          <p>
+            While waiting for approval, you can register via WhatsApp/SMS by texting{" "}
+            <strong>JOIN</strong> to our bot.
+          </p>
+          <p>Admin contact: +254182528510</p>
+          <Button asChild className="bg-emerald-700 text-white hover:bg-emerald-800">
+            <a href="https://wa.me/254182528510" target="_blank" rel="noopener noreferrer">
+              Contact Admin
+            </a>
+          </Button>
+        </div>
+        <p className="mt-4 text-xs text-muted-foreground" role="status">
+          {error
+            ? "Unable to check approval. We will retry automatically."
+            : "Approval status refreshes every 30 seconds. You will be redirected when approved."}
+        </p>
         <Button variant="outline" className="mt-6" onClick={signOut}>
           <LogOut className="mr-2 h-4 w-4" /> Sign out
         </Button>

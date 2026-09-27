@@ -10,7 +10,7 @@ const supabase = createClient(
 
 const ADMIN_PHONE = Deno.env.get("ADMIN_WHATSAPP_NUMBER") ?? "254182528510";
 const PAYBILL = "522522";
-const ACCOUNT = "798164";
+const ACCOUNT = "7989164";
 
 // ── Types ─────────────────────────────────────────
 interface Profile {
@@ -451,7 +451,7 @@ async function handleBalance(phone: string, channel: "whatsapp" | "sms"): Promis
           ? `Last Contribution: ${formatKES(last.amount)} on ${formatDate(last.contributed_on)}\n`
           : `No contributions yet.\n`) +
         `\nPay via M-Pesa:\n` +
-        `Paybill: ${PAYBILL}\n` +
+        `Bank: KCB Bank Kenya\nPaybill: ${PAYBILL}\n` +
         `Account: ${ACCOUNT}\n\n` +
         `Text HELP for all commands`,
     });
@@ -580,7 +580,7 @@ async function handleDeposit(
         "DEPOSIT {amount} {mpesa_ref}\n\n" +
         "Example:\n" +
         "DEPOSIT 5000 QWE123456\n\n" +
-        `Paybill: ${PAYBILL}\n` +
+        `Bank: KCB Bank Kenya\nPaybill: ${PAYBILL}\n` +
         `Account: ${ACCOUNT}`,
     });
     return;
@@ -637,7 +637,7 @@ async function handleDeposit(
         `──────────────────\n` +
         `Amount:     ${formatKES(amount)}\n` +
         `M-Pesa Ref: ${mpesaRef}\n` +
-        `Paybill:    ${PAYBILL}\n` +
+        `Bank: KCB Bank Kenya\nPaybill:    ${PAYBILL}\n` +
         `Account:    ${ACCOUNT}\n` +
         `Status:     Pending confirmation\n\n` +
         `Treasurer will confirm within 24hrs.\n` +
@@ -982,7 +982,7 @@ async function handleHelp(phone: string, channel: "whatsapp" | "sms"): Promise<v
       `HELP     - Show this menu\n` +
       `STOP     - Unsubscribe\n\n` +
       `Pay via M-Pesa:\n` +
-      `Paybill: ${PAYBILL}\n` +
+      `Bank: KCB Bank Kenya\nPaybill: ${PAYBILL}\n` +
       `Account: ${ACCOUNT}\n\n` +
       `Web App:\n` +
       `murage-funds-hub.vercel.app\n\n` +

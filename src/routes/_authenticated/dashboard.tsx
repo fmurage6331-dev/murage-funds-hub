@@ -1,3 +1,4 @@
+import { PaymentInfoCard } from "@/components/PaymentInfoCard";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -139,6 +140,7 @@ function Dashboard() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
+      <PaymentInfoCard />
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {stats.map((s) => (
           <Card key={s.label}>
