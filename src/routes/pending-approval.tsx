@@ -6,7 +6,7 @@ import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Leaf, LogOut, Clock } from "lucide-react";
+import { Leaf, LogOut, Loader2, MessageSquare, XCircle } from "lucide-react";
 
 export const Route = createFileRoute("/pending-approval")({
   ssr: false,
@@ -26,6 +26,7 @@ export const Route = createFileRoute("/pending-approval")({
 function PendingApprovalPage() {
   const { user, status } = Route.useRouteContext();
   const qc = useQueryClient();
+  // Polls every 30s (and on window focus) so an admin approval redirects automatically.
   const { data: profile, error } = useQuery(profileStatusOptions(user.id));
   const navigate = useNavigate();
 
@@ -55,18 +56,20 @@ function PendingApprovalPage() {
         </div>
         <h1 className="font-serif text-xl font-semibold text-primary">Murage Foundation</h1>
 
+        {/* 1. Current status message with spinner */}
         <div className="mt-6 flex flex-col items-center gap-2">
-          <Clock className="h-8 w-8 text-muted-foreground" />
           {rejected ? (
             <>
+              <XCircle className="h-8 w-8 text-destructive" />
               <h2 className="text-lg font-semibold">Access not granted</h2>
               <p className="text-sm text-muted-foreground">
                 An admin has reviewed your signup and did not approve access. If you believe this is
-                a mistake, please contact the foundation directly.
+                a mistake, please contact the foundation on +254182528510.
               </p>
             </>
           ) : (
             <>
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               <h2 className="text-lg font-semibold">Awaiting approval</h2>
               <p className="text-sm text-muted-foreground">
                 Your account has been created and is waiting for an admin to approve access. You'll
@@ -76,29 +79,39 @@ function PendingApprovalPage() {
           )}
         </div>
 
-        <div className="mt-6 space-y-3 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
-          <p className="font-semibold">KCB Bank Kenya · M-Pesa Paybill</p>
+        {/* 2 & 3. Payment details and WhatsApp/SMS bot registration */}
+        <div className="mt-6 space-y-3 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-left text-sm text-emerald-950">
+          <p className="font-semibold">
+            While waiting for approval, here are our payment details for when you join:
+          </p>
           <p>
+            KCB Bank Kenya · M-Pesa Paybill
+            <br />
             Paybill: <strong>522522</strong>
             <br />
             Account: <strong>7989164</strong>
           </p>
           <p>
-            While waiting for approval, you can register via WhatsApp/SMS by texting{" "}
-            <strong>JOIN</strong> to our bot.
+            You can also register via WhatsApp/SMS by texting <strong>JOIN</strong> to our bot
+            number.
           </p>
           <p>Admin contact: +254182528510</p>
-          <Button asChild className="bg-emerald-700 text-white hover:bg-emerald-800">
+          {/* 4. Admin contact button */}
+          <Button asChild className="w-full bg-emerald-700 text-white hover:bg-emerald-800">
             <a href="https://wa.me/254182528510" target="_blank" rel="noopener noreferrer">
-              Contact Admin
+              <MessageSquare className="mr-2 h-4 w-4" />
+              Contact Admin on WhatsApp
             </a>
           </Button>
         </div>
+
+        {/* 5. Auto-refresh status */}
         <p className="mt-4 text-xs text-muted-foreground" role="status">
           {error
             ? "Unable to check approval. We will retry automatically."
             : "Approval status refreshes every 30 seconds. You will be redirected when approved."}
         </p>
+        {/* 6. Sign out */}
         <Button variant="outline" className="mt-6" onClick={signOut}>
           <LogOut className="mr-2 h-4 w-4" /> Sign out
         </Button>
