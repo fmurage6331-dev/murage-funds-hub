@@ -1,4 +1,4 @@
-import { PaymentInfoCard } from "@/components/PaymentInfoCard";
+import { PaymentInfoCard } from "@/components/shared/PaymentInfoCard";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";

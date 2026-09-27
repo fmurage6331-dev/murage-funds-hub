@@ -186,30 +186,25 @@ function Page() {
   const approveBotRegistration = useMutation({
     mutationFn: (reg: PendingRegistration) =>
       adminAction({ action: "approve_bot_registration", registrationId: reg.id }),
-    onSuccess: (_, reg) => {
+    onSuccess: (result, reg) => {
       toast.success(
-        `${reg.full_name ?? "Member"} approved! ${reg.email ? "Magic link sent." : "Bot access granted."}`,
+        `${reg.full_name ?? "Member"} approved! ${reg.email ? "Password reset email sent." : "Bot access granted."}`,
       );
+      if (result.warning) toast.warning(result.warning);
       invalidateAll();
     },
     onError: (e: Error) => toast.error(e.message),
   });
 
   const rejectBotRegistration = useMutation({
-    mutationFn: async ({ reg, reason }: { reg: PendingRegistration; reason: string }) => {
-      const { error } = await supabase
-        .from("pending_registrations")
-        .update({
-          status: "rejected",
-          admin_notes: reason,
-          approved_by: user.id,
-          approved_at: new Date().toISOString(),
-        })
-        .eq("id", reg.id);
-      if (error) throw error;
-    },
+    mutationFn: ({ reg, reason }: { reg: PendingRegistration; reason: string }) =>
+      adminAction({
+        action: "reject_bot_registration",
+        registrationId: reg.id,
+        reason: reason.trim(),
+      }),
     onSuccess: () => {
-      toast.success("Registration rejected and applicant notified.");
+      toast.success("Registration rejected.");
       setRejectTarget(null);
       setRejectReason("");
       invalidateAll();

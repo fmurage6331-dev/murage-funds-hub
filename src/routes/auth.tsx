@@ -2,24 +2,36 @@ import { fetchProfileStatus } from "@/lib/profile-status";
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Leaf, ShieldCheck } from "lucide-react";
+import { AlertCircle, Leaf } from "lucide-react";
 
 export const Route = createFileRoute("/auth")({
   component: AuthPage,
 });
 
+const ADMIN_CONTACT = "+254182528510";
+const CONSENT_VERSION = "KDPA-2019-V1.0";
+const MIN_PASSWORD_LENGTH = 8;
+
 function AuthPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  // Sign in
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  // Sign up
   const [fullName, setFullName] = useState("");
+  const [signUpEmail, setSignUpEmail] = useState("");
+  const [signUpPassword, setSignUpPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [consentGiven, setConsentGiven] = useState(false);
 
   useEffect(() => {
@@ -35,7 +47,8 @@ function AuthPage() {
             to: profile.status === "approved" ? "/dashboard" : "/pending-approval",
             replace: true,
           });
-      } catch {
+      } catch (error) {
+        console.error("Session check failed", error);
         if (active) toast.error("Unable to check your session. Please sign in again.");
       }
     };
@@ -47,18 +60,34 @@ function AuthPage() {
 
   const signIn = async (e: React.FormEvent) => {
     e.preventDefault();
+    setAuthError(null);
     setLoading(true);
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
-      const profile = await fetchProfileStatus(data.user.id);
+      // A missing/unreadable profile is treated as pending: that page keeps polling and
+      // forwards the member to /dashboard the moment an admin approves them.
+      let status = "pending";
+      try {
+        const profile = await fetchProfileStatus(data.user.id);
+        status = profile.status;
+      } catch (profileError) {
+        console.error("Unable to read membership status after sign in", profileError);
+      }
       toast.success("Welcome back");
       await navigate({
-        to: profile.status === "approved" ? "/dashboard" : "/pending-approval",
+        to: status === "approved" ? "/dashboard" : "/pending-approval",
         replace: true,
       });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to sign in. Please retry.");
+      console.error("Sign in failed", error);
+      const message = error instanceof Error ? error.message : "";
+      // Email verification is disabled; a legacy unconfirmed account needs an admin.
+      setAuthError(
+        /email not confirmed/i.test(message)
+          ? `Please contact admin on ${ADMIN_CONTACT} to activate your account`
+          : message || "Unable to sign in. Please retry.",
+      );
     } finally {
       setLoading(false);
     }
@@ -66,29 +95,49 @@ function AuthPage() {
 
   const signUp = async (e: React.FormEvent) => {
     e.preventDefault();
+    setAuthError(null);
+    if (signUpPassword.length < MIN_PASSWORD_LENGTH) {
+      setAuthError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
+      return;
+    }
+    if (signUpPassword !== confirmPassword) {
+      setAuthError("Passwords do not match.");
+      return;
+    }
     if (!consentGiven) {
-      return toast.error(
+      setAuthError(
         "You must accept the Kenya Data Protection Act (KDPA) consent notice to register.",
       );
+      return;
     }
     setLoading(true);
     try {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
+      const { data, error } = await supabase.auth.signUp({
+        email: signUpEmail,
+        password: signUpPassword,
         options: {
-          emailRedirectTo: `${window.location.origin}/my-contributions`,
+          // No emailRedirectTo: email confirmation is disabled, so signup returns a session
+          // straight away and the member waits on /pending-approval for admin approval.
           data: {
             full_name: fullName,
+            phone_number: phoneNumber.trim() || null,
             consent_given: true,
-            consent_version: "1.0",
+            consent_version: CONSENT_VERSION,
           },
         },
       });
       if (error) throw error;
-      toast.success("Account created. You can sign in now.");
+      if (!data.session) {
+        // Only possible if confirmation is switched back on in Supabase — there is no session
+        // to continue with, so point the member at the admin instead of bouncing them.
+        setAuthError(`Please contact admin on ${ADMIN_CONTACT} to activate your account`);
+        return;
+      }
+      toast.success("Account created! Please wait for admin approval.");
+      await navigate({ to: "/pending-approval", replace: true });
     } catch (error) {
-      toast.error(
+      console.error("Sign up failed", error);
+      setAuthError(
         error instanceof Error ? error.message : "Unable to create account. Please retry.",
       );
     } finally {
@@ -110,7 +159,15 @@ function AuthPage() {
           <h1 className="font-serif text-2xl font-semibold">Team access</h1>
           <p className="mt-1 text-sm text-muted-foreground">Sign in to manage financial records.</p>
 
-          <Tabs defaultValue="signin" className="mt-6">
+          {authError && (
+            <Alert variant="destructive" className="mt-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Unable to continue</AlertTitle>
+              <AlertDescription>{authError}</AlertDescription>
+            </Alert>
+          )}
+
+          <Tabs defaultValue="signin" className="mt-6" onValueChange={() => setAuthError(null)}>
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="signin">Sign in</TabsTrigger>
               <TabsTrigger value="signup">Create account</TabsTrigger>
@@ -124,6 +181,7 @@ function AuthPage() {
                     id="signin-email"
                     type="email"
                     required
+                    autoComplete="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                   />
@@ -134,6 +192,7 @@ function AuthPage() {
                     id="signin-password"
                     type="password"
                     required
+                    autoComplete="current-password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                   />
@@ -141,6 +200,10 @@ function AuthPage() {
                 <Button type="submit" className="w-full" disabled={loading}>
                   {loading ? "Signing in..." : "Sign in"}
                 </Button>
+                <p className="text-xs text-muted-foreground">
+                  Approved members sign in with their email and password. No email verification is
+                  required.
+                </p>
               </form>
             </TabsContent>
 
@@ -151,6 +214,7 @@ function AuthPage() {
                   <Input
                     id="su-name"
                     required
+                    autoComplete="name"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                   />
@@ -161,8 +225,9 @@ function AuthPage() {
                     id="su-email"
                     type="email"
                     required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    autoComplete="email"
+                    value={signUpEmail}
+                    onChange={(e) => setSignUpEmail(e.target.value)}
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -171,10 +236,39 @@ function AuthPage() {
                     id="su-password"
                     type="password"
                     required
-                    minLength={6}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    minLength={MIN_PASSWORD_LENGTH}
+                    autoComplete="new-password"
+                    value={signUpPassword}
+                    onChange={(e) => setSignUpPassword(e.target.value)}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Minimum {MIN_PASSWORD_LENGTH} characters.
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="su-confirm-password">Confirm password</Label>
+                  <Input
+                    id="su-confirm-password"
+                    type="password"
+                    required
+                    minLength={MIN_PASSWORD_LENGTH}
+                    autoComplete="new-password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="su-phone">Phone number (for SMS/WhatsApp updates)</Label>
+                  <Input
+                    id="su-phone"
+                    type="tel"
+                    inputMode="tel"
+                    placeholder="e.g. 0712345678"
+                    autoComplete="tel"
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">Optional</p>
                 </div>
                 <div className="flex items-start space-x-2 pt-2">
                   <Checkbox
@@ -199,7 +293,8 @@ function AuthPage() {
                   {loading ? "Creating..." : "Create account"}
                 </Button>
                 <p className="text-xs text-muted-foreground">
-                  The first account created becomes the administrator.
+                  No email verification needed. An administrator reviews new accounts and approval
+                  usually takes less than 24 hours. Need help? Contact {ADMIN_CONTACT}.
                 </p>
               </form>
             </TabsContent>
