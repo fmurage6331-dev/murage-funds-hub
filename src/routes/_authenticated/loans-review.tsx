@@ -13,8 +13,26 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Send } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Check, PlusCircle, Search, Send, X } from "lucide-react";
 import { toast } from "sonner";
+import { useState, useMemo } from "react";
 import { useRoles } from "@/hooks/use-roles";
 import { RepaymentScheduleDialog } from "@/components/loans/RepaymentScheduleDialog";
 import { notifyLoanStatusChange } from "@/lib/notifications";
@@ -43,6 +61,16 @@ function Page() {
   const r = useRoles(user.id);
   const qc = useQueryClient();
 
+  // Officer "log loan on behalf of member" dialog state
+  const [logDialogOpen, setLogDialogOpen] = useState(false);
+  const [selectedMemberId, setSelectedMemberId] = useState("");
+  const [memberSearch, setMemberSearch] = useState("");
+  const [loanType, setLoanType] = useState<"project" | "emergency">("project");
+  const [loanAmount, setLoanAmount] = useState("");
+  const [loanPurpose, setLoanPurpose] = useState("");
+  const [repaymentMonths, setRepaymentMonths] = useState("6");
+  const [loanNotes, setLoanNotes] = useState("");
+
   const { data: loans = [], isLoading } = useQuery({
     queryKey: ["loans", "review"],
     enabled: r.canForwardLoans || r.isBoard || r.isAdmin,
@@ -54,6 +82,82 @@ function Page() {
           .order("created_at", { ascending: false })
       ).data ?? [],
   });
+
+  // Approved members query for the searchable member selector
+  const { data: approvedMembers = [] } = useQuery({
+    queryKey: ["approved-members-for-officer-entry"],
+    enabled: r.canForwardLoans,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, full_name, phone_number, email")
+        .eq("status", "approved")
+        .order("full_name");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const filteredMembers = useMemo(() => {
+    if (!memberSearch.trim()) return approvedMembers;
+    const q = memberSearch.toLowerCase();
+    return approvedMembers.filter((m) => {
+      const name = (m.full_name ?? "").toLowerCase();
+      const phone = (m.phone_number ?? "").toLowerCase();
+      const email = (m.email ?? "").toLowerCase();
+      return name.includes(q) || phone.includes(q) || email.includes(q);
+    });
+  }, [approvedMembers, memberSearch]);
+
+  const currentRole = r.isAdmin ? "admin" : r.isChairman ? "chairman" : "treasurer";
+
+  const logOnBehalfMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedMemberId) throw new Error("Please select a member.");
+      const parsedAmount = Number(loanAmount);
+      if (isNaN(parsedAmount) || parsedAmount <= 0)
+        throw new Error("Amount must be greater than zero.");
+      if (!loanPurpose.trim()) throw new Error("Purpose is required.");
+      const months = Number(repaymentMonths);
+      if (isNaN(months) || months <= 0 || !Number.isInteger(months))
+        throw new Error("Repayment months must be a positive whole number.");
+
+      const purpose = loanNotes.trim()
+        ? `${loanPurpose.trim()}\n\nOfficer note: ${loanNotes.trim()}`
+        : loanPurpose.trim();
+
+      const { error } = await supabase.from("loans").insert({
+        member_id: selectedMemberId,
+        loan_type: loanType,
+        amount: parsedAmount,
+        purpose,
+        repayment_months: months,
+        status: "submitted",
+        entered_by: user.id,
+        entered_by_role: currentRole,
+        on_behalf_of: true,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Loan request logged on behalf of member!");
+      setLogDialogOpen(false);
+      setSelectedMemberId("");
+      setMemberSearch("");
+      setLoanType("project");
+      setLoanAmount("");
+      setLoanPurpose("");
+      setRepaymentMonths("6");
+      setLoanNotes("");
+      qc.invalidateQueries({ queryKey: ["loans"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const handleLogSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    logOnBehalfMutation.mutate();
+  };
 
   const forward = useMutation({
     mutationFn: async ({ id, loan }: { id: string; loan?: any }) => {
@@ -126,11 +230,22 @@ function Page() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-4">
-      <div>
-        <h2 className="font-serif text-2xl font-semibold text-primary">Loan Requests</h2>
-        <p className="text-sm text-muted-foreground">
-          Chairman or treasurer forwards eligible requests to the board.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="font-serif text-2xl font-semibold text-primary">Loan Requests</h2>
+          <p className="text-sm text-muted-foreground">
+            Chairman or treasurer forwards eligible requests to the board.
+          </p>
+        </div>
+        {r.canForwardLoans && (
+          <Button
+            variant="outline"
+            className="shrink-0 border-amber-300 text-amber-700 hover:bg-amber-50"
+            onClick={() => setLogDialogOpen(true)}
+          >
+            <PlusCircle className="mr-2 h-4 w-4" /> Log Loan for Member
+          </Button>
+        )}
       </div>
       <Card>
         <Table>
@@ -168,6 +283,11 @@ function Page() {
                     <TableCell>
                       <div className="font-medium">{p?.full_name ?? "—"}</div>
                       <div className="text-xs text-muted-foreground">{p?.email}</div>
+                      {l.on_behalf_of && (
+                        <Badge className="mt-1 bg-amber-600 text-white hover:bg-amber-600">
+                          Officer Entry
+                        </Badge>
+                      )}
                     </TableCell>
                     <TableCell>{new Date(l.created_at).toLocaleDateString()}</TableCell>
                     <TableCell>
@@ -239,6 +359,133 @@ function Page() {
           </TableBody>
         </Table>
       </Card>
+
+      <Dialog open={logDialogOpen} onOpenChange={setLogDialogOpen}>
+        <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Log Loan for Member</DialogTitle>
+            <p className="text-sm text-muted-foreground">
+              Record a loan request on behalf of a member without web access. It still follows the
+              normal board approval flow.
+            </p>
+          </DialogHeader>
+          <form onSubmit={handleLogSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="officer-loan-member">Member *</Label>
+              <div className="relative">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="officer-loan-member"
+                  placeholder="Search by name or phone…"
+                  className="pl-8"
+                  value={memberSearch}
+                  onChange={(e) => setMemberSearch(e.target.value)}
+                />
+              </div>
+              <Select value={selectedMemberId} onValueChange={setSelectedMemberId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select an approved member" />
+                </SelectTrigger>
+                <SelectContent>
+                  {filteredMembers.length === 0 ? (
+                    <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                      No members found
+                    </div>
+                  ) : (
+                    filteredMembers.map((m) => (
+                      <SelectItem key={m.id} value={m.id}>
+                        {m.full_name ?? "Unnamed"} — {m.phone_number ?? m.email ?? "no contact"}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="officer-loan-type">Loan Type *</Label>
+              <Select
+                value={loanType}
+                onValueChange={(v: "project" | "emergency") => setLoanType(v)}
+              >
+                <SelectTrigger id="officer-loan-type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="project">Project</SelectItem>
+                  <SelectItem value="emergency">Emergency</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="officer-loan-amount">Amount (KES) *</Label>
+                <Input
+                  id="officer-loan-amount"
+                  type="number"
+                  min="1"
+                  step="1"
+                  placeholder="0"
+                  value={loanAmount}
+                  onChange={(e) => setLoanAmount(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="officer-loan-months">Repayment Months *</Label>
+                <Input
+                  id="officer-loan-months"
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={repaymentMonths}
+                  onChange={(e) => setRepaymentMonths(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="officer-loan-purpose">Purpose *</Label>
+              <Textarea
+                id="officer-loan-purpose"
+                rows={3}
+                placeholder="What is the loan for?"
+                value={loanPurpose}
+                onChange={(e) => setLoanPurpose(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="officer-loan-notes">Officer Notes (optional)</Label>
+              <Textarea
+                id="officer-loan-notes"
+                rows={2}
+                placeholder="Any notes for the board"
+                value={loanNotes}
+                onChange={(e) => setLoanNotes(e.target.value)}
+              />
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setLogDialogOpen(false)}
+                disabled={logOnBehalfMutation.isPending}
+              >
+                <X className="mr-1 h-4 w-4" /> Cancel
+              </Button>
+              <Button type="submit" disabled={logOnBehalfMutation.isPending}>
+                <Check className="mr-1 h-4 w-4" />
+                {logOnBehalfMutation.isPending ? "Logging…" : "Log Loan"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
