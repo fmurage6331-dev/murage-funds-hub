@@ -71,10 +71,16 @@ function PendingApprovalPage() {
             <>
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               <h2 className="text-lg font-semibold">Awaiting approval</h2>
-              <p className="text-sm text-muted-foreground">
-                Your account has been created and is waiting for an admin to approve access. You'll
-                be able to sign in normally once approved.
-              </p>
+              <div className="space-y-2 text-sm text-muted-foreground">
+                <p>
+                  Your account has been created successfully! An administrator will review and
+                  approve your account within 24 hours.
+                </p>
+                <p>You will be able to log in once approved.</p>
+                <p>
+                  Need help? Contact: <strong className="text-foreground">+254182528510</strong>
+                </p>
+              </div>
             </>
           )}
         </div>
