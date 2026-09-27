@@ -201,3 +201,181 @@ export function validateContributionRows(
     };
   });
 }
+
+/* ───────────────────────────── Members (8F) ───────────────────────────── */
+
+export const MEMBER_COLUMNS = ["full_name", "phone_number", "email", "role", "notes"] as const;
+
+/** Roles an admin may assign from the Members import. */
+export const IMPORTABLE_MEMBER_ROLES = [
+  "member",
+  "board_member",
+  "secretary",
+  "assistant_secretary",
+] as const;
+
+export type MemberImportRow = {
+  line: number;
+  full_name: string;
+  phone_number: string;
+  email: string;
+  role: string;
+  notes: string;
+  errors: string[];
+};
+
+export const memberTemplateCsv = (): string =>
+  [
+    MEMBER_COLUMNS.join(","),
+    "Jane Wanjiru,0712345678,jane@example.com,member,Joined 2024",
+    "Peter Kamau,0723456789,,member,Phone only member",
+  ].join("\n") + "\n";
+
+const looksLikeEmail = (value: string): boolean => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+
+/**
+ * Validate parsed member records: name required, phone required and unique
+ * (against existing members and earlier rows), role from the allowed list.
+ */
+export function validateMemberRows(
+  records: CsvRecord[],
+  existingPhones: Iterable<string>,
+): MemberImportRow[] {
+  const seen = new Set<string>();
+  Array.from(existingPhones).forEach((phone) => {
+    const key = normPhone(phone);
+    if (key.length === 9) seen.add(key);
+  });
+
+  return records.map((record) => {
+    const values = record.values;
+    const fullName = (values.full_name ?? "").trim();
+    const phone = (values.phone_number ?? "").trim();
+    const email = (values.email ?? "").trim();
+    const rawRole = (values.role ?? "").trim().toLowerCase();
+    const role = rawRole || "member";
+    const errors: string[] = [];
+
+    if (!fullName) errors.push("full_name is required");
+
+    const phoneKey = normPhone(phone);
+    if (!phone) errors.push("phone_number is required");
+    else if (phoneKey.length !== 9) errors.push("phone_number looks invalid");
+    else if (seen.has(phoneKey)) errors.push(`Phone ${phone} already exists or repeats in file`);
+
+    if (email && !looksLikeEmail(email)) errors.push("email looks invalid");
+
+    if (!IMPORTABLE_MEMBER_ROLES.includes(role as (typeof IMPORTABLE_MEMBER_ROLES)[number]))
+      errors.push(`role must be one of ${IMPORTABLE_MEMBER_ROLES.join(", ")}`);
+
+    if (errors.length === 0 && phoneKey.length === 9) seen.add(phoneKey);
+
+    return {
+      line: record.line,
+      full_name: fullName,
+      phone_number: phone,
+      email,
+      role,
+      notes: values.notes ?? "",
+      errors,
+    };
+  });
+}
+
+/* ────────────────────────────── Loans (8F) ────────────────────────────── */
+
+export const LOAN_COLUMNS = [
+  "member_phone",
+  "amount",
+  "purpose",
+  "loan_type",
+  "repayment_months",
+  "disbursed_date",
+  "status",
+  "notes",
+] as const;
+
+export const LOAN_TYPES = ["project", "emergency"] as const;
+export const IMPORTABLE_LOAN_STATUSES = ["submitted", "approved"] as const;
+
+export type LoanImportRow = {
+  line: number;
+  member_phone: string;
+  amount: string;
+  purpose: string;
+  loan_type: string;
+  repayment_months: string;
+  disbursed_date: string;
+  status: string;
+  notes: string;
+  memberId: string | null;
+  errors: string[];
+};
+
+export const loanTemplateCsv = (): string =>
+  [
+    LOAN_COLUMNS.join(","),
+    "0712345678,30000,Stock purchase,project,6,2026-01-15,approved,Imported historical loan",
+    "0723456789,15000,Medical emergency,emergency,3,,submitted,",
+  ].join("\n") + "\n";
+
+/**
+ * Validate parsed loan records. Approved rows rely on the existing database
+ * trigger to generate the repayment schedule.
+ */
+export function validateLoanRows(records: CsvRecord[], members: MemberOption[]): LoanImportRow[] {
+  const byPhone = new Map<string, MemberOption>();
+  members.forEach((member) => {
+    const key = normPhone(member.phone_number);
+    if (key.length === 9 && !byPhone.has(key)) byPhone.set(key, member);
+  });
+
+  return records.map((record) => {
+    const values = record.values;
+    const phone = (values.member_phone ?? "").trim();
+    const rawType = (values.loan_type ?? "").trim().toLowerCase();
+    const loan_type = rawType || "project";
+    const rawStatus = (values.status ?? "").trim().toLowerCase();
+    const status = rawStatus || "submitted";
+    const months = (values.repayment_months ?? "").trim();
+    const disbursed = (values.disbursed_date ?? "").trim();
+    const errors: string[] = [];
+
+    const member = byPhone.get(normPhone(phone));
+    if (!phone) errors.push("member_phone is required");
+    else if (!member) errors.push(`No approved member matches ${phone}`);
+
+    const amount = Number(values.amount ?? "");
+    if (!(values.amount ?? "").trim()) errors.push("amount is required");
+    else if (Number.isNaN(amount) || amount <= 0) errors.push("amount must be a positive number");
+
+    if (!(values.purpose ?? "").trim()) errors.push("purpose is required");
+
+    if (!LOAN_TYPES.includes(loan_type as (typeof LOAN_TYPES)[number]))
+      errors.push(`loan_type must be one of ${LOAN_TYPES.join(", ")}`);
+
+    const monthCount = Number(months);
+    if (!months) errors.push("repayment_months is required");
+    else if (Number.isNaN(monthCount) || monthCount <= 0 || !Number.isInteger(monthCount))
+      errors.push("repayment_months must be a positive whole number");
+
+    if (disbursed && !isValidIsoDate(disbursed)) errors.push("disbursed_date must be YYYY-MM-DD");
+
+    if (!IMPORTABLE_LOAN_STATUSES.includes(status as (typeof IMPORTABLE_LOAN_STATUSES)[number]))
+      errors.push(`status must be one of ${IMPORTABLE_LOAN_STATUSES.join(", ")}`);
+
+    return {
+      line: record.line,
+      member_phone: phone,
+      amount: values.amount ?? "",
+      purpose: (values.purpose ?? "").trim(),
+      loan_type,
+      repayment_months: months,
+      disbursed_date: disbursed,
+      status,
+      notes: values.notes ?? "",
+      memberId: member ? member.id : null,
+      errors,
+    };
+  });
+}

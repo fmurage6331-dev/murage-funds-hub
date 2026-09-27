@@ -16,6 +16,7 @@ import { Route as PendingApprovalRouteImport } from './routes/pending-approval'
 import { Route as AuthenticatedAuditLogsRouteImport } from './routes/_authenticated/audit-logs'
 import { Route as AuthenticatedContributionsReviewRouteImport } from './routes/_authenticated/contributions-review'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedDataImportRouteImport } from './routes/_authenticated/data-import'
 import { Route as AuthenticatedDonorsRouteImport } from './routes/_authenticated/donors'
 import { Route as AuthenticatedFinancialStatementsRouteImport } from './routes/_authenticated/financial-statements'
 import { Route as AuthenticatedLoanRulesRouteImport } from './routes/_authenticated/loan-rules'
@@ -62,6 +63,11 @@ const AuthenticatedContributionsReviewRoute =
 const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedDataImportRoute = AuthenticatedDataImportRouteImport.update({
+  id: '/data-import',
+  path: '/data-import',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedDonorsRoute = AuthenticatedDonorsRouteImport.update({
@@ -138,6 +144,7 @@ export interface FileRoutesByFullPath {
   '/audit-logs': typeof AuthenticatedAuditLogsRoute
   '/contributions-review': typeof AuthenticatedContributionsReviewRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/data-import': typeof AuthenticatedDataImportRoute
   '/donors': typeof AuthenticatedDonorsRoute
   '/financial-statements': typeof AuthenticatedFinancialStatementsRoute
   '/loan-rules': typeof AuthenticatedLoanRulesRoute
@@ -158,6 +165,7 @@ export interface FileRoutesByTo {
   '/audit-logs': typeof AuthenticatedAuditLogsRoute
   '/contributions-review': typeof AuthenticatedContributionsReviewRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/data-import': typeof AuthenticatedDataImportRoute
   '/donors': typeof AuthenticatedDonorsRoute
   '/financial-statements': typeof AuthenticatedFinancialStatementsRoute
   '/loan-rules': typeof AuthenticatedLoanRulesRoute
@@ -180,6 +188,7 @@ export interface FileRoutesById {
   '/_authenticated/audit-logs': typeof AuthenticatedAuditLogsRoute
   '/_authenticated/contributions-review': typeof AuthenticatedContributionsReviewRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
+  '/_authenticated/data-import': typeof AuthenticatedDataImportRoute
   '/_authenticated/donors': typeof AuthenticatedDonorsRoute
   '/_authenticated/financial-statements': typeof AuthenticatedFinancialStatementsRoute
   '/_authenticated/loan-rules': typeof AuthenticatedLoanRulesRoute
@@ -202,6 +211,7 @@ export interface FileRouteTypes {
     | '/audit-logs'
     | '/contributions-review'
     | '/dashboard'
+    | '/data-import'
     | '/donors'
     | '/financial-statements'
     | '/loan-rules'
@@ -222,6 +232,7 @@ export interface FileRouteTypes {
     | '/audit-logs'
     | '/contributions-review'
     | '/dashboard'
+    | '/data-import'
     | '/donors'
     | '/financial-statements'
     | '/loan-rules'
@@ -243,6 +254,7 @@ export interface FileRouteTypes {
     | '/_authenticated/audit-logs'
     | '/_authenticated/contributions-review'
     | '/_authenticated/dashboard'
+    | '/_authenticated/data-import'
     | '/_authenticated/donors'
     | '/_authenticated/financial-statements'
     | '/_authenticated/loan-rules'
@@ -313,6 +325,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/data-import': {
+      id: '/_authenticated/data-import'
+      path: '/data-import'
+      fullPath: '/data-import'
+      preLoaderRoute: typeof AuthenticatedDataImportRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/donors': {
@@ -421,6 +440,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedAuditLogsRoute: typeof AuthenticatedAuditLogsRoute
   AuthenticatedContributionsReviewRoute: typeof AuthenticatedContributionsReviewRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
+  AuthenticatedDataImportRoute: typeof AuthenticatedDataImportRoute
   AuthenticatedDonorsRoute: typeof AuthenticatedDonorsRoute
   AuthenticatedFinancialStatementsRoute: typeof AuthenticatedFinancialStatementsRoute
   AuthenticatedLoanRulesRoute: typeof AuthenticatedLoanRulesRoute
@@ -438,6 +458,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAuditLogsRoute: AuthenticatedAuditLogsRoute,
   AuthenticatedContributionsReviewRoute: AuthenticatedContributionsReviewRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
+  AuthenticatedDataImportRoute: AuthenticatedDataImportRoute,
   AuthenticatedDonorsRoute: AuthenticatedDonorsRoute,
   AuthenticatedFinancialStatementsRoute: AuthenticatedFinancialStatementsRoute,
   AuthenticatedLoanRulesRoute: AuthenticatedLoanRulesRoute,
