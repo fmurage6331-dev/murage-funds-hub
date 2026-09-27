@@ -28,6 +28,7 @@ import { Route as AuthenticatedMyContributionsRouteImport } from './routes/_auth
 import { Route as AuthenticatedMyLoansRouteImport } from './routes/_authenticated/my-loans'
 import { Route as AuthenticatedTransactionsRouteImport } from './routes/_authenticated/transactions'
 import { Route as AuthenticatedUsersRouteImport } from './routes/_authenticated/users'
+import { Route as AuthenticatedMemberProfileIndexRouteImport } from './routes/_authenticated/member-profile.index'
 import { Route as AuthenticatedMemberProfileMemberIdRouteImport } from './routes/_authenticated/member-profile.$memberId'
 
 const IndexRoute = IndexRouteImport.update({
@@ -130,6 +131,12 @@ const AuthenticatedUsersRoute = AuthenticatedUsersRouteImport.update({
   path: '/users',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedMemberProfileIndexRoute =
+  AuthenticatedMemberProfileIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedMemberProfileRoute,
+  } as any)
 const AuthenticatedMemberProfileMemberIdRoute =
   AuthenticatedMemberProfileMemberIdRouteImport.update({
     id: '/$memberId',
@@ -157,6 +164,7 @@ export interface FileRoutesByFullPath {
   '/transactions': typeof AuthenticatedTransactionsRoute
   '/users': typeof AuthenticatedUsersRoute
   '/member-profile/$memberId': typeof AuthenticatedMemberProfileMemberIdRoute
+  '/member-profile/': typeof AuthenticatedMemberProfileIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -172,12 +180,12 @@ export interface FileRoutesByTo {
   '/loan-votes': typeof AuthenticatedLoanVotesRoute
   '/loans-review': typeof AuthenticatedLoansReviewRoute
   '/meetings': typeof AuthenticatedMeetingsRoute
-  '/member-profile': typeof AuthenticatedMemberProfileRouteWithChildren
   '/my-contributions': typeof AuthenticatedMyContributionsRoute
   '/my-loans': typeof AuthenticatedMyLoansRoute
   '/transactions': typeof AuthenticatedTransactionsRoute
   '/users': typeof AuthenticatedUsersRoute
   '/member-profile/$memberId': typeof AuthenticatedMemberProfileMemberIdRoute
+  '/member-profile': typeof AuthenticatedMemberProfileIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -201,6 +209,7 @@ export interface FileRoutesById {
   '/_authenticated/transactions': typeof AuthenticatedTransactionsRoute
   '/_authenticated/users': typeof AuthenticatedUsersRoute
   '/_authenticated/member-profile/$memberId': typeof AuthenticatedMemberProfileMemberIdRoute
+  '/_authenticated/member-profile/': typeof AuthenticatedMemberProfileIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -224,6 +233,7 @@ export interface FileRouteTypes {
     | '/transactions'
     | '/users'
     | '/member-profile/$memberId'
+    | '/member-profile/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -239,12 +249,12 @@ export interface FileRouteTypes {
     | '/loan-votes'
     | '/loans-review'
     | '/meetings'
-    | '/member-profile'
     | '/my-contributions'
     | '/my-loans'
     | '/transactions'
     | '/users'
     | '/member-profile/$memberId'
+    | '/member-profile'
   id:
     | '__root__'
     | '/'
@@ -267,6 +277,7 @@ export interface FileRouteTypes {
     | '/_authenticated/transactions'
     | '/_authenticated/users'
     | '/_authenticated/member-profile/$memberId'
+    | '/_authenticated/member-profile/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -411,6 +422,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedUsersRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/member-profile/': {
+      id: '/_authenticated/member-profile/'
+      path: '/'
+      fullPath: '/member-profile/'
+      preLoaderRoute: typeof AuthenticatedMemberProfileIndexRouteImport
+      parentRoute: typeof AuthenticatedMemberProfileRoute
+    }
     '/_authenticated/member-profile/$memberId': {
       id: '/_authenticated/member-profile/$memberId'
       path: '/$memberId'
@@ -423,12 +441,14 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedMemberProfileRouteChildren {
   AuthenticatedMemberProfileMemberIdRoute: typeof AuthenticatedMemberProfileMemberIdRoute
+  AuthenticatedMemberProfileIndexRoute: typeof AuthenticatedMemberProfileIndexRoute
 }
 
 const AuthenticatedMemberProfileRouteChildren: AuthenticatedMemberProfileRouteChildren =
   {
     AuthenticatedMemberProfileMemberIdRoute:
       AuthenticatedMemberProfileMemberIdRoute,
+    AuthenticatedMemberProfileIndexRoute: AuthenticatedMemberProfileIndexRoute,
   }
 
 const AuthenticatedMemberProfileRouteWithChildren =
