@@ -407,8 +407,8 @@ function LoansImport({
       const row = validRows[i];
       try {
         // The loans table has no disbursed_date column: an imported date is stored on
-        // created_at (and decision_at for approved rows) so the treasury schedule
-        // trigger starts installments from the historical date.
+        // created_at (and decision_at for approved rows). Approved imports first insert as
+        // submitted, then transition to approved so the UPDATE trigger creates the schedule.
         const disbursedIso = row.disbursed_date
           ? new Date(`${row.disbursed_date}T09:00:00Z`).toISOString()
           : null;
@@ -432,7 +432,8 @@ function LoansImport({
           amount: Number(row.amount),
           purpose,
           repayment_months: Number(row.repayment_months),
-          status: row.status,
+          // The deployed repayment-schedule trigger fires on UPDATE OF status, not INSERT.
+          status: "submitted",
           entered_by: officerId,
           entered_by_role: officerRole,
           on_behalf_of: true,
@@ -440,8 +441,27 @@ function LoansImport({
         if (disbursedIso) insert.created_at = disbursedIso;
         if (row.status === "approved" && disbursedIso) insert.decision_at = disbursedIso;
 
-        const { error } = await supabase.from("loans").insert(insert);
+        const { data: created, error } = await supabase
+          .from("loans")
+          .insert(insert)
+          .select("id")
+          .single();
         if (error) throw error;
+        if (row.status === "approved") {
+          const { error: approvalError } = await supabase
+            .from("loans")
+            .update({ status: "approved", decision_at: disbursedIso ?? new Date().toISOString() })
+            .eq("id", created.id);
+          if (approvalError) {
+            // Admins can delete loans; don't leave a submitted duplicate on retry.
+            const { error: cleanupError } = await supabase
+              .from("loans")
+              .delete()
+              .eq("id", created.id);
+            if (cleanupError) console.error("Loan import cleanup failed", created.id, cleanupError);
+            throw approvalError;
+          }
+        }
         imported += 1;
       } catch (e) {
         failed += 1;

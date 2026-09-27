@@ -251,58 +251,35 @@ Deno.serve(async (req: Request) => {
       retentionDate.setFullYear(retentionDate.getFullYear() + 7);
       const dataRetentionUntil = retentionDate.toISOString();
 
-      let memberId: string;
-
-      if (email) {
-        const created = await db.auth.admin.createUser({
-          email: email,
-          password: crypto.randomUUID(),
-          email_confirm: true,
-          user_metadata: {
-            full_name: fullName,
-            phone_number: phoneNumber,
-          },
-        });
-        if (created.error) return json({ error: created.error.message }, 409);
-        memberId = created.data.user.id;
-
-        try {
-          const { error: profileError } = await db.from("profiles").upsert({
-            id: memberId,
-            full_name: fullName,
-            email: email,
-            phone_number: phoneNumber,
-            phone_only_member: false,
-            status: "approved",
-            consent_given: true,
-            whatsapp_opt_in: true,
-            data_retention_until: dataRetentionUntil,
-          });
-          if (profileError) throw profileError;
-
-          const { error: roleInsertError } = await db.from("user_roles").upsert(
-            {
-              user_id: memberId,
-              role: role as Role,
+      // profiles.id and user_roles.user_id both reference auth.users, so even a phone-only
+      // manual member needs an Auth identity. Mirror the bot-approval flow: email members get a
+      // confirmed account with an unusable random password, phone-only members get a
+      // phone-backed account (phone left unconfirmed, as the bot flow does).
+      const metadata = { full_name: fullName, phone_number: phoneNumber };
+      const created = await db.auth.admin.createUser(
+        email
+          ? {
+              email: email,
+              password: crypto.randomUUID(),
+              email_confirm: true,
+              user_metadata: metadata,
+            }
+          : {
+              phone: phoneNumber,
+              phone_confirm: false,
+              user_metadata: metadata,
             },
-            { onConflict: "user_id,role" },
-          );
-          if (roleInsertError) throw roleInsertError;
-        } catch (error) {
-          const { error: cleanupError } = await db.auth.admin.deleteUser(memberId);
-          if (cleanupError) console.error("Manual member creation cleanup failed", cleanupError);
-          throw error;
-        }
-      } else {
-        const newId = crypto.randomUUID();
-        memberId = newId;
+      );
+      if (created.error) return json({ error: created.error.message }, 409);
+      const memberId = created.data.user.id;
 
-        const { error: profileError } = await db.from("profiles").insert({
-          id: newId,
+      try {
+        const { error: profileError } = await db.from("profiles").upsert({
+          id: memberId,
           full_name: fullName,
-          email: null,
+          email: email,
           phone_number: phoneNumber,
-          phone_only_member: true,
+          phone_only_member: !email,
           status: "approved",
           consent_given: true,
           whatsapp_opt_in: true,
@@ -312,12 +289,17 @@ Deno.serve(async (req: Request) => {
 
         const { error: roleInsertError } = await db.from("user_roles").upsert(
           {
-            user_id: newId,
+            user_id: memberId,
             role: role as Role,
           },
           { onConflict: "user_id,role" },
         );
         if (roleInsertError) throw roleInsertError;
+      } catch (error) {
+        // Do not leave an orphaned Auth identity blocking a later retry.
+        const { error: cleanupError } = await db.auth.admin.deleteUser(memberId);
+        if (cleanupError) console.error("Manual member creation cleanup failed", cleanupError);
+        throw error;
       }
 
       return json({ success: true, memberId });
