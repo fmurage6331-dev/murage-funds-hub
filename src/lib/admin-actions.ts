@@ -26,9 +26,26 @@ export async function adminAction(body: AdminAction): Promise<{ warning?: string
         body: JSON.stringify(body),
       },
     );
-    const result: { success?: boolean; error?: string; warning?: string } = await response.json();
+    // The function always answers with JSON once it is deployed, but an undeployed or
+    // crashing function returns an HTML/text gateway page, so parse defensively and keep
+    // the HTTP status — an admin needs to know "not deployed", not just "failed".
+    let result: { success?: boolean; error?: string; warning?: string } = {};
+    try {
+      result = (await response.json()) as {
+        success?: boolean;
+        error?: string;
+        warning?: string;
+      };
+    } catch {
+      result = {};
+    }
     if (!response.ok || result.success !== true)
-      throw new Error(result.error || "Admin action failed.");
+      throw new Error(
+        result.error ??
+          (response.ok
+            ? "Admin action failed."
+            : `Admin action failed (HTTP ${String(response.status)}). Is the admin-actions Edge Function deployed?`),
+      );
     // Non-fatal delivery problems (e.g. a password reset email that did not send).
     return { warning: result.warning };
   } catch (error) {
