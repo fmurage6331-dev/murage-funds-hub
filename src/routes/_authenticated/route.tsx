@@ -40,6 +40,8 @@ import {
   Gavel,
   ScrollText,
   FileSpreadsheet,
+  UserCircle,
+  Database,
 } from "lucide-react";
 import { useRoles } from "@/hooks/use-roles";
 
@@ -100,6 +102,8 @@ function AuthedLayout() {
       url: "/contributions-review",
       icon: ShieldCheck,
     });
+  if (r.isAdmin || r.isTreasurer || r.isChairman)
+    financeItems.push({ title: "Member Profiles", url: "/member-profile", icon: UserCircle });
   if (r.canViewFinancials)
     financeItems.push({ title: "Transactions", url: "/transactions", icon: Receipt });
   if (r.canViewFinancials)
@@ -120,11 +124,13 @@ function AuthedLayout() {
   const adminItems: Item[] = [];
   if (r.isAdmin) {
     adminItems.push({ title: "Users & Roles", url: "/users", icon: Users });
+    adminItems.push({ title: "Data Import", url: "/data-import", icon: Database });
     adminItems.push({ title: "Loan Rules", url: "/loan-rules", icon: Settings });
   }
 
   const allItems = [...memberItems, ...financeItems, ...adminItems];
-  const activeTitle = allItems.find((i) => i.url === path)?.title ?? "Overview";
+  const isActiveItem = (url: string) => path === url || path.startsWith(`${url}/`);
+  const activeTitle = allItems.find((i) => isActiveItem(i.url))?.title ?? "Overview";
 
   return (
     <SidebarProvider>
@@ -153,7 +159,7 @@ function AuthedLayout() {
                 <SidebarMenu>
                   {memberItems.map((item) => (
                     <SidebarMenuItem key={item.url}>
-                      <SidebarMenuButton asChild isActive={path === item.url}>
+                      <SidebarMenuButton asChild isActive={isActiveItem(item.url)}>
                         <Link to={item.url} className="flex items-center gap-2">
                           <item.icon className="h-4 w-4" />
                           <span>{item.title}</span>
@@ -172,7 +178,7 @@ function AuthedLayout() {
                   <SidebarMenu>
                     {financeItems.map((item) => (
                       <SidebarMenuItem key={item.url}>
-                        <SidebarMenuButton asChild isActive={path === item.url}>
+                        <SidebarMenuButton asChild isActive={isActiveItem(item.url)}>
                           <Link to={item.url} className="flex items-center gap-2">
                             <item.icon className="h-4 w-4" />
                             <span>{item.title}</span>
@@ -192,7 +198,7 @@ function AuthedLayout() {
                   <SidebarMenu>
                     {adminItems.map((item) => (
                       <SidebarMenuItem key={item.url}>
-                        <SidebarMenuButton asChild isActive={path === item.url}>
+                        <SidebarMenuButton asChild isActive={isActiveItem(item.url)}>
                           <Link to={item.url} className="flex items-center gap-2">
                             <item.icon className="h-4 w-4" />
                             <span>{item.title}</span>

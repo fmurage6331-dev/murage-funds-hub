@@ -59,8 +59,17 @@ function setup(options = {}) {
           calls.push(["update", table, data]);
           return chain;
         },
-        upsert: async (data) => {
-          calls.push(["upsert", table, data]);
+        upsert: async (data, opts) => {
+          calls.push(["upsert", table, data, opts]);
+          return {
+            error:
+              options.profileFailure && table === "profiles"
+                ? new Error("profile write failed")
+                : null,
+          };
+        },
+        insert: async (data) => {
+          calls.push(["insert", table, data]);
           return { error: null };
         },
         maybeSingle: async () => ({
@@ -333,4 +342,98 @@ test("repeating a bot rejection is a no-op", async () => {
   assert.equal(response.status, 200);
   assert.equal((await response.json()).success, true);
   assert.equal(calls.length, 0);
+});
+
+test("create_manual_member with email creates Auth user, profile, and role", async () => {
+  const { request, calls } = setup();
+  const response = await request({
+    action: "create_manual_member",
+    fullName: "Jane Doe",
+    phoneNumber: "0712345678",
+    email: "jane@example.com",
+    role: "secretary",
+  });
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.success, true);
+  assert.equal(body.memberId, "created-user");
+
+  const create = calls.find((call) => call[0] === "create");
+  assert.equal(create[1].email, "jane@example.com");
+  assert.equal(create[1].email_confirm, true);
+  assert.equal(create[1].user_metadata.full_name, "Jane Doe");
+  assert.equal(create[1].user_metadata.phone_number, "0712345678");
+
+  const upsertProfile = calls.find((call) => call[0] === "upsert" && call[1] === "profiles");
+  assert.equal(upsertProfile[2].id, "created-user");
+  assert.equal(upsertProfile[2].full_name, "Jane Doe");
+  assert.equal(upsertProfile[2].email, "jane@example.com");
+  assert.equal(upsertProfile[2].phone_number, "0712345678");
+  assert.equal(upsertProfile[2].phone_only_member, false);
+  assert.equal(upsertProfile[2].status, "approved");
+  assert.equal(upsertProfile[2].consent_given, true);
+  assert.equal(upsertProfile[2].whatsapp_opt_in, true);
+
+  const upsertRole = calls.find((call) => call[0] === "upsert" && call[1] === "user_roles");
+  assert.equal(upsertRole[2].user_id, "created-user");
+  assert.equal(upsertRole[2].role, "secretary");
+});
+
+test("create_manual_member without email creates a phone-backed Auth user, profile and role", async () => {
+  const { request, calls } = setup();
+  const response = await request({
+    action: "create_manual_member",
+    fullName: "John Kamau",
+    phoneNumber: "0722000000",
+    email: null,
+    role: "member",
+  });
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.success, true);
+  assert.equal(body.memberId, "created-user");
+
+  // profiles.id and user_roles.user_id reference auth.users, so a phone-only member still
+  // needs an Auth identity — with the phone unconfirmed, exactly like bot approval.
+  const create = calls.find((call) => call[0] === "create");
+  assert.equal(create[1].phone, "0722000000");
+  assert.equal(create[1].phone_confirm, false);
+  assert.equal(create[1].email, undefined);
+  assert.equal(create[1].password, undefined);
+  assert.equal(create[1].user_metadata.full_name, "John Kamau");
+  assert.equal(create[1].user_metadata.phone_number, "0722000000");
+
+  const upsertProfile = calls.find((call) => call[0] === "upsert" && call[1] === "profiles");
+  assert.equal(upsertProfile[2].id, "created-user");
+  assert.equal(upsertProfile[2].full_name, "John Kamau");
+  assert.equal(upsertProfile[2].email, null);
+  assert.equal(upsertProfile[2].phone_number, "0722000000");
+  assert.equal(upsertProfile[2].phone_only_member, true);
+  assert.equal(upsertProfile[2].status, "approved");
+  assert.equal(upsertProfile[2].consent_given, true);
+  assert.equal(upsertProfile[2].whatsapp_opt_in, true);
+
+  const upsertRole = calls.find((call) => call[0] === "upsert" && call[1] === "user_roles");
+  assert.equal(upsertRole[2].user_id, "created-user");
+  assert.equal(upsertRole[2].role, "member");
+});
+
+test("a profile write failure deletes the new Auth user so a retry is not blocked", async () => {
+  const { request, calls } = setup({ profileFailure: true });
+  const response = await request({
+    action: "create_manual_member",
+    fullName: "John Kamau",
+    phoneNumber: "0722000000",
+    email: null,
+    role: "member",
+  });
+  assert.equal(response.status, 500);
+  assert.equal(
+    calls.some((call) => call[0] === "delete" && call[1] === "created-user"),
+    true,
+  );
+  assert.equal(
+    calls.some((call) => call[0] === "upsert" && call[1] === "user_roles"),
+    false,
+  );
 });

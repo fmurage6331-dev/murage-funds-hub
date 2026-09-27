@@ -31,7 +31,10 @@ const cors = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
-const json = (body: { success: true; warning?: string } | { error: string }, status = 200) =>
+const json = (
+  body: { success: true; memberId?: string; warning?: string } | { error: string },
+  status = 200,
+) =>
   new Response(JSON.stringify(body), {
     status,
     headers: { ...cors, "Content-Type": "application/json" },
@@ -234,6 +237,72 @@ Deno.serve(async (req: Request) => {
         .maybeSingle();
       if (rejectError) throw rejectError;
       if (!rejected) return json({ error: "Registration not found" }, 404);
+    } else if (body.action === "create_manual_member") {
+      const fullName = typeof body.fullName === "string" ? body.fullName.trim() : "";
+      const phoneNumber = typeof body.phoneNumber === "string" ? body.phoneNumber.trim() : "";
+      const email = typeof body.email === "string" && body.email.trim() ? body.email.trim() : null;
+      const role = typeof body.role === "string" ? body.role.trim() : "member";
+
+      if (!fullName) return json({ error: "Full Name is required" }, 400);
+      if (!phoneNumber) return json({ error: "Phone Number is required" }, 400);
+      if (!roles.includes(role as Role)) return json({ error: "Invalid role" }, 400);
+
+      const retentionDate = new Date();
+      retentionDate.setFullYear(retentionDate.getFullYear() + 7);
+      const dataRetentionUntil = retentionDate.toISOString();
+
+      // profiles.id and user_roles.user_id both reference auth.users, so even a phone-only
+      // manual member needs an Auth identity. Mirror the bot-approval flow: email members get a
+      // confirmed account with an unusable random password, phone-only members get a
+      // phone-backed account (phone left unconfirmed, as the bot flow does).
+      const metadata = { full_name: fullName, phone_number: phoneNumber };
+      const created = await db.auth.admin.createUser(
+        email
+          ? {
+              email: email,
+              password: crypto.randomUUID(),
+              email_confirm: true,
+              user_metadata: metadata,
+            }
+          : {
+              phone: phoneNumber,
+              phone_confirm: false,
+              user_metadata: metadata,
+            },
+      );
+      if (created.error) return json({ error: created.error.message }, 409);
+      const memberId = created.data.user.id;
+
+      try {
+        const { error: profileError } = await db.from("profiles").upsert({
+          id: memberId,
+          full_name: fullName,
+          email: email,
+          phone_number: phoneNumber,
+          phone_only_member: !email,
+          status: "approved",
+          consent_given: true,
+          whatsapp_opt_in: true,
+          data_retention_until: dataRetentionUntil,
+        });
+        if (profileError) throw profileError;
+
+        const { error: roleInsertError } = await db.from("user_roles").upsert(
+          {
+            user_id: memberId,
+            role: role as Role,
+          },
+          { onConflict: "user_id,role" },
+        );
+        if (roleInsertError) throw roleInsertError;
+      } catch (error) {
+        // Do not leave an orphaned Auth identity blocking a later retry.
+        const { error: cleanupError } = await db.auth.admin.deleteUser(memberId);
+        if (cleanupError) console.error("Manual member creation cleanup failed", cleanupError);
+        throw error;
+      }
+
+      return json({ success: true, memberId });
     } else {
       return json({ error: "Unknown action" }, 400);
     }

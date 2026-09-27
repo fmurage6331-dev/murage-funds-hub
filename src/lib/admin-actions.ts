@@ -5,9 +5,18 @@ type AdminAction =
   | { action: "approve_member"; userId: string; role: Role }
   | { action: "reject_member"; userId: string; reason?: string }
   | { action: "approve_bot_registration"; registrationId: string }
-  | { action: "reject_bot_registration"; registrationId: string; reason: string };
+  | { action: "reject_bot_registration"; registrationId: string; reason: string }
+  | {
+      action: "create_manual_member";
+      fullName: string;
+      phoneNumber: string;
+      email: string | null;
+      role: string;
+    };
 
-export async function adminAction(body: AdminAction): Promise<{ warning?: string }> {
+export async function adminAction(
+  body: AdminAction,
+): Promise<{ success?: boolean; memberId?: string; warning?: string }> {
   try {
     const {
       data: { session },
@@ -29,10 +38,11 @@ export async function adminAction(body: AdminAction): Promise<{ warning?: string
     // The function always answers with JSON once it is deployed, but an undeployed or
     // crashing function returns an HTML/text gateway page, so parse defensively and keep
     // the HTTP status — an admin needs to know "not deployed", not just "failed".
-    let result: { success?: boolean; error?: string; warning?: string } = {};
+    let result: { success?: boolean; memberId?: string; error?: string; warning?: string } = {};
     try {
       result = (await response.json()) as {
         success?: boolean;
+        memberId?: string;
         error?: string;
         warning?: string;
       };
@@ -47,7 +57,7 @@ export async function adminAction(body: AdminAction): Promise<{ warning?: string
             : `Admin action failed (HTTP ${String(response.status)}). Is the admin-actions Edge Function deployed?`),
       );
     // Non-fatal delivery problems (e.g. a password reset email that did not send).
-    return { warning: result.warning };
+    return { success: true, memberId: result.memberId, warning: result.warning };
   } catch (error) {
     throw new Error(error instanceof Error ? error.message : "Admin action failed. Please retry.");
   }
