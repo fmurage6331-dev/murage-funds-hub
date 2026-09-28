@@ -15,12 +15,18 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Card, CardContent } from "@/components/ui/card";
-import { Plus, Trash2, Mail, Phone, MapPin } from "lucide-react";
+import { Plus, Pencil, Trash2, Mail, Phone, MapPin } from "lucide-react";
 import { toast } from "sonner";
+import { UnauthorizedCard } from "@/components/shared/UnauthorizedCard";
+import { useRoles } from "@/hooks/use-roles";
 
 export const Route = createFileRoute("/_authenticated/donors")({
   component: DonorsPage,
 });
+
+type DonorForm = { name: string; email: string; phone: string; address: string; notes: string };
+
+const emptyForm: DonorForm = { name: "", email: "", phone: "", address: "", notes: "" };
 
 const fmt = (n: number) =>
   new Intl.NumberFormat("en-KE", {
@@ -33,44 +39,73 @@ function DonorsPage() {
   const qc = useQueryClient();
   const { user } = Route.useRouteContext();
 
-  const { data: role = [] } = useQuery({
-    queryKey: ["role", user.id],
-    queryFn: async () =>
-      (await supabase.from("user_roles").select("role").eq("user_id", user.id)).data?.map(
-        (r) => r.role,
-      ) ?? [],
-  });
-  const isAdmin = role.includes("admin");
+  const r = useRoles(user.id);
+  const canManageDonors = r.isAdmin || r.isSecretary || r.isAssistantSecretary;
 
   const { data: donors = [], isLoading } = useQuery({
     queryKey: ["donors", "with-totals"],
+    enabled: canManageDonors,
     queryFn: async () => {
-      const { data: ds } = await supabase.from("donors").select("*").order("name");
-      const { data: txs } = await supabase
-        .from("transactions")
-        .select("donor_id, amount")
-        .eq("type", "income");
-      const totals = new Map<string, number>();
-      txs?.forEach((t) => {
-        if (t.donor_id) totals.set(t.donor_id, (totals.get(t.donor_id) ?? 0) + Number(t.amount));
-      });
-      return (ds ?? []).map((d) => ({ ...d, total: totals.get(d.id) ?? 0 }));
+      try {
+        const { data: ds, error } = await supabase.from("donors").select("*").order("name");
+        if (error) throw error;
+        const { data: txs, error: txsError } = await supabase
+          .from("transactions")
+          .select("donor_id, amount")
+          .eq("type", "income");
+        if (txsError) throw txsError;
+        const totals = new Map<string, number>();
+        (txs ?? []).forEach((t) => {
+          if (t.donor_id) totals.set(t.donor_id, (totals.get(t.donor_id) ?? 0) + Number(t.amount));
+        });
+        return (ds ?? []).map((d) => ({ ...d, total: totals.get(d.id) ?? 0 }));
+      } catch (error) {
+        console.error("Failed to load donors", error);
+        toast.error("Could not load donors.");
+        return [];
+      }
     },
   });
 
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", email: "", phone: "", address: "", notes: "" });
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState<DonorForm>(emptyForm);
 
-  const create = useMutation({
+  const closeDialog = () => {
+    setOpen(false);
+    setEditingId(null);
+    setForm(emptyForm);
+  };
+
+  const startEdit = (donor: (typeof donors)[number]) => {
+    setEditingId(donor.id);
+    setForm({
+      name: donor.name,
+      email: donor.email ?? "",
+      phone: donor.phone ?? "",
+      address: donor.address ?? "",
+      notes: donor.notes ?? "",
+    });
+    setOpen(true);
+  };
+
+  const save = useMutation({
     mutationFn: async () => {
+      if (!form.name.trim()) throw new Error("Donor name is required.");
+
+      if (editingId) {
+        const { error } = await supabase.from("donors").update(form).eq("id", editingId);
+        if (error) throw error;
+        return;
+      }
+
       const { error } = await supabase.from("donors").insert({ ...form, created_by: user.id });
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("Donor added");
-      setOpen(false);
-      setForm({ name: "", email: "", phone: "", address: "", notes: "" });
-      qc.invalidateQueries({ queryKey: ["donors"] });
+      toast.success(editingId ? "Donor updated" : "Donor added");
+      closeDialog();
+      void qc.invalidateQueries({ queryKey: ["donors"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -82,10 +117,20 @@ function DonorsPage() {
     },
     onSuccess: () => {
       toast.success("Deleted");
-      qc.invalidateQueries({ queryKey: ["donors"] });
+      void qc.invalidateQueries({ queryKey: ["donors"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
+  if (r.isLoading) {
+    return (
+      <div className="py-16 text-center text-sm text-muted-foreground">Checking permissions…</div>
+    );
+  }
+
+  if (!r.isAdmin && !r.isSecretary && !r.isAssistantSecretary) {
+    return <UnauthorizedCard message="This page is restricted to secretariat." />;
+  }
 
   return (
     <div className="mx-auto max-w-6xl space-y-4">
@@ -96,21 +141,29 @@ function DonorsPage() {
             People and organisations supporting the foundation.
           </p>
         </div>
-        {isAdmin && (
-          <Dialog open={open} onOpenChange={setOpen}>
+        {canManageDonors && (
+          <Dialog open={open} onOpenChange={(next) => (next ? setOpen(true) : closeDialog())}>
             <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" /> Add donor
+              <Button
+                onClick={() => {
+                  setEditingId(null);
+                  setForm(emptyForm);
+                  setOpen(true);
+                }}
+              >
+                <Plus className="mr-2 h-4 w-4" /> Add Donor
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle className="font-serif">New donor</DialogTitle>
+                <DialogTitle className="font-serif">
+                  {editingId ? "Edit donor" : "New donor"}
+                </DialogTitle>
               </DialogHeader>
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
-                  create.mutate();
+                  save.mutate();
                 }}
                 className="space-y-3"
               >
@@ -155,8 +208,8 @@ function DonorsPage() {
                   />
                 </div>
                 <DialogFooter>
-                  <Button type="submit" disabled={create.isPending}>
-                    {create.isPending ? "Saving..." : "Save donor"}
+                  <Button type="submit" disabled={save.isPending}>
+                    {save.isPending ? "Saving..." : "Save donor"}
                   </Button>
                 </DialogFooter>
               </form>
@@ -178,23 +231,38 @@ function DonorsPage() {
           {donors.map((d) => (
             <Card key={d.id} className="relative">
               <CardContent className="pt-6">
-                <div className="flex items-start justify-between">
+                <div className="flex items-start justify-between gap-2">
                   <div>
                     <div className="font-serif text-lg font-semibold text-primary">{d.name}</div>
                     <div className="mt-1 text-xs uppercase tracking-wider text-gold">
                       Total: {fmt(d.total)}
                     </div>
                   </div>
-                  {isAdmin && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => {
-                        if (confirm(`Delete ${d.name}?`)) del.mutate(d.id);
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
+                  {canManageDonors && (
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Edit ${d.name}`}
+                        disabled={save.isPending || del.isPending}
+                        onClick={() => startEdit(d)}
+                      >
+                        <Pencil className="h-4 w-4 text-muted-foreground" />
+                      </Button>
+                      {r.isAdmin && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Delete ${d.name}`}
+                          disabled={del.isPending}
+                          onClick={() => {
+                            if (confirm(`Delete ${d.name}?`)) del.mutate(d.id);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      )}
+                    </div>
                   )}
                 </div>
                 <div className="mt-4 space-y-1.5 text-sm text-muted-foreground">

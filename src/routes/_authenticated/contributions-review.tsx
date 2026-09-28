@@ -35,6 +35,7 @@ import { Check, X, PlusCircle, Search, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { UnauthorizedCard } from "@/components/shared/UnauthorizedCard";
 import { useRoles } from "@/hooks/use-roles";
+import { attachMemberProfiles, embeddedProfile } from "@/lib/member-profiles";
 import { notifyContributionReview } from "@/lib/notifications";
 import { ContributionImportPanel } from "@/components/contributions/ContributionImportPanel";
 import { useEffect, useMemo, useState } from "react";
@@ -55,16 +56,8 @@ let profilesEmbedSupported = true;
 
 type ContributionStatus = "all" | "pending" | "confirmed" | "rejected";
 
-type ProfileSummary = {
-  full_name: string | null;
-  email: string | null;
-  phone_number: string | null;
-};
-
-/** A contribution row plus the joined member profile (embedded or merged client-side). */
-type ContributionRow = Tables<"contributions"> & {
-  profiles?: ProfileSummary | ProfileSummary[] | null;
-};
+/** A contribution row plus the member profile (embedded, or merged client-side). */
+type ContributionRow = Tables<"contributions"> & { profiles?: unknown };
 
 const fmt = (n: number) =>
   new Intl.NumberFormat("en-KE", {
@@ -72,13 +65,6 @@ const fmt = (n: number) =>
     currency: "KES",
     maximumFractionDigits: 0,
   }).format(n);
-
-/** PostgREST may embed a to-one relation as a single object; normalise both shapes. */
-function profileOf(row: ContributionRow): ProfileSummary | null {
-  const joined = row.profiles;
-  if (!joined) return null;
-  return Array.isArray(joined) ? (joined[0] ?? null) : joined;
-}
 
 function Page() {
   const { user } = Route.useRouteContext();
@@ -148,7 +134,7 @@ function Page() {
           console.warn("[contributions-review] profiles embed unavailable, using merge:", error);
         }
 
-        return await fetchContributionsWithMergedProfiles();
+        return await loadContributionsWithProfiles();
       } catch (error) {
         throw error instanceof Error ? error : new Error("Failed to load contributions.");
       }
@@ -306,7 +292,7 @@ function Page() {
         .eq("id", id);
       if (error) throw error;
 
-      const profile = row ? profileOf(row) : null;
+      const profile = row ? embeddedProfile(row.profiles) : null;
       if (profile?.email) {
         void notifyContributionReview({
           memberEmail: profile.email,
@@ -410,7 +396,7 @@ function Page() {
               </TableRow>
             ) : (
               visibleRows.map((row) => {
-                const profile = profileOf(row);
+                const profile = embeddedProfile(row.profiles);
                 const busy = pendingActionId === row.id;
                 return (
                   <TableRow key={row.id}>
@@ -641,27 +627,14 @@ function Page() {
 }
 
 /**
- * Fallback loader used when PostgREST cannot resolve the `profiles` embed
- * (contributions.member_id references auth.users, not public.profiles).
- * Fetches both tables and merges on the client so names still render.
+ * Fallback loader used when PostgREST cannot resolve the `profiles` embed:
+ * fetch both tables and merge on the client so member names still render.
  */
-async function fetchContributionsWithMergedProfiles(): Promise<ContributionRow[]> {
-  const { data: rows, error } = await supabase
+async function loadContributionsWithProfiles(): Promise<ContributionRow[]> {
+  const { data, error } = await supabase
     .from("contributions")
     .select("*")
     .order("created_at", { ascending: false });
   if (error) throw error;
-  const contributionRows = rows ?? [];
-
-  const memberIds = [...new Set(contributionRows.map((row) => row.member_id))];
-  if (memberIds.length === 0) return contributionRows;
-
-  const { data: profiles, error: profilesError } = await supabase
-    .from("profiles")
-    .select("id, full_name, email, phone_number")
-    .in("id", memberIds);
-  if (profilesError) throw profilesError;
-
-  const byId = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
-  return contributionRows.map((row) => ({ ...row, profiles: byId.get(row.member_id) ?? null }));
+  return (await attachMemberProfiles(data ?? [])) as ContributionRow[];
 }
