@@ -1,11 +1,13 @@
 import { useCallback, useState } from "react";
-import { FileSpreadsheet } from "lucide-react";
+import { FileSpreadsheet, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { downloadCsv } from "@/lib/csv-import";
 import {
   buildContributionsCsv,
+  buildContributionsReportHtml,
   contributionsFileName,
+  openPrintWindow,
   type ContributionExportRow,
 } from "@/lib/export-documents";
 import { loadProfileNames } from "@/lib/financial-data";
@@ -47,7 +49,7 @@ export function ContributionExportButtons({
   scopeLabel,
   generatedBy = "Treasurer",
 }: ContributionExportButtonsProps) {
-  const [exporting, setExporting] = useState<"excel" | null>(null);
+  const [exporting, setExporting] = useState<"excel" | "pdf" | null>(null);
 
   const buildExportRows = useCallback(async (): Promise<ContributionExportRow[]> => {
     const confirmerIds = rows
@@ -101,6 +103,31 @@ export function ContributionExportButtons({
     }
   };
 
+  const handleExportPdf = async () => {
+    if (rows.length === 0) {
+      toast.error("There is nothing to export for this filter.");
+      return;
+    }
+    setExporting("pdf");
+    try {
+      const exportRows = await buildExportRows();
+      const opened = openPrintWindow(
+        "Murage Foundation - Contributions Report",
+        buildContributionsReportHtml(exportRows, { scopeLabel, generatedBy }),
+        "landscape",
+      );
+      if (!opened) {
+        toast.error("Allow pop-ups for this site to open the printable report.");
+        return;
+      }
+      toast.success("Report opened — print or save it as PDF.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not build the report.");
+    } finally {
+      setExporting(null);
+    }
+  };
+
   return (
     <>
       <Button
@@ -111,6 +138,15 @@ export function ContributionExportButtons({
       >
         <FileSpreadsheet className="h-4 w-4" />
         {exporting === "excel" ? "Exporting…" : "Export Excel"}
+      </Button>
+      <Button
+        variant="outline"
+        onClick={() => void handleExportPdf()}
+        disabled={exporting !== null}
+        className="gap-2 border-rose-600 text-rose-700 hover:bg-rose-50 hover:text-rose-800"
+      >
+        <FileText className="h-4 w-4" />
+        {exporting === "pdf" ? "Preparing…" : "Export PDF"}
       </Button>
     </>
   );
