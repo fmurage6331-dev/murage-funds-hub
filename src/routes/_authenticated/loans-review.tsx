@@ -396,7 +396,7 @@ function Page() {
                             onClick={() => forward.mutate({ id: l.id, loan: l })}
                           >
                             <Send className="mr-1 h-3 w-3" />
-                            {forward.isPending ? "Forwarding…" : "Forward to Chairman"}
+                            {forward.isPending ? "Forwarding…" : "Forward to Board for Voting"}
                           </Button>
                         )}
                         {canDecide && (l.status === "submitted" || l.status === "forwarded") && (
