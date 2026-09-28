@@ -277,7 +277,7 @@ export function RepaymentScheduleDialog({
         if (!user) throw new Error("Please sign in again before logging a payment.");
 
         const submittedAt = new Date().toISOString();
-        const { error } = await supabase
+        const { data: updated, error } = await supabase
           .from("loan_repayments")
           .update({
             payment_status: "pending_confirmation",
@@ -287,8 +287,12 @@ export function RepaymentScheduleDialog({
             member_notes: notes.trim() || null,
             payment_method: paymentMethod,
           })
-          .eq("id", selectedInstallment.id);
+          .eq("id", selectedInstallment.id)
+          .in("payment_status", ["not_paid", "rejected"])
+          .select("id")
+          .maybeSingle();
         if (error) throw error;
+        if (!updated) throw new Error("This installment is already awaiting review.");
 
         return {
           amount,

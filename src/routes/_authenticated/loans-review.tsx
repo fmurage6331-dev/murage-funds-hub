@@ -263,7 +263,7 @@ function Page() {
 
         const confirmedAt = new Date().toISOString();
         const status = amount >= Number(selectedPayment.amount_due) ? "paid" : "partial";
-        const { error } = await supabase
+        const { data: updated, error } = await supabase
           .from("loan_repayments")
           .update({
             amount_paid: amount,
@@ -276,8 +276,11 @@ function Page() {
             reference: selectedPayment.payment_reference,
           })
           .eq("id", selectedPayment.id)
-          .eq("payment_status", "pending_confirmation");
+          .eq("payment_status", "pending_confirmation")
+          .select("id")
+          .maybeSingle();
         if (error) throw error;
+        if (!updated) throw new Error("This payment has already been reviewed.");
 
         let outstandingBalance: number | undefined;
         const { data: loanRepayments, error: balanceError } = await supabase
@@ -348,7 +351,7 @@ function Page() {
         if (!officer) throw new Error("Please sign in again before rejecting a payment.");
 
         const rejectedAt = new Date().toISOString();
-        const { error } = await supabase
+        const { data: updated, error } = await supabase
           .from("loan_repayments")
           .update({
             payment_status: "rejected",
@@ -358,8 +361,11 @@ function Page() {
             payment_confirmed_at: rejectedAt,
           })
           .eq("id", selectedPayment.id)
-          .eq("payment_status", "pending_confirmation");
+          .eq("payment_status", "pending_confirmation")
+          .select("id")
+          .maybeSingle();
         if (error) throw error;
+        if (!updated) throw new Error("This payment has already been reviewed.");
         return { reason, rejectedAt };
       } catch (error) {
         throw error instanceof Error ? error : new Error("Could not reject this payment.");
