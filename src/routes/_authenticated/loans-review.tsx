@@ -33,6 +33,7 @@ import {
 import { Check, PlusCircle, Search, Send, X } from "lucide-react";
 import { toast } from "sonner";
 import { useState, useMemo } from "react";
+import { UnauthorizedCard } from "@/components/shared/UnauthorizedCard";
 import { useRoles } from "@/hooks/use-roles";
 import { RepaymentScheduleDialog } from "@/components/loans/RepaymentScheduleDialog";
 import { notifyLoanStatusChange } from "@/lib/notifications";
@@ -222,10 +223,14 @@ function Page() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  if (!r.isFinanceOfficer) {
+  if (r.isLoading) {
     return (
-      <div className="text-sm text-muted-foreground">You do not have access to loan reviews.</div>
+      <div className="py-16 text-center text-sm text-muted-foreground">Checking permissions…</div>
     );
+  }
+
+  if (!r.isAdmin && !r.isTreasurer && !r.isChairman) {
+    return <UnauthorizedCard message="This page is restricted to officers." />;
   }
 
   return (

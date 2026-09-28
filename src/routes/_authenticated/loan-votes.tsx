@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { UnauthorizedCard } from "@/components/shared/UnauthorizedCard";
 import { useRoles } from "@/hooks/use-roles";
 
 export const Route = createFileRoute("/_authenticated/loan-votes")({
@@ -63,10 +64,14 @@ function Page() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  if (!r.isAdmin && !r.isBoardMember && !r.isChairman) {
+  if (r.isLoading) {
     return (
-      <div className="text-sm text-muted-foreground">Only board members can vote on loans.</div>
+      <div className="py-16 text-center text-sm text-muted-foreground">Checking permissions…</div>
     );
+  }
+
+  if (!r.isAdmin && !r.isBoardMember && !r.isChairman) {
+    return <UnauthorizedCard message="This page is restricted to board members." />;
   }
 
   return (

@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
+import { UnauthorizedCard } from "@/components/shared/UnauthorizedCard";
 import { useRoles } from "@/hooks/use-roles";
 
 export const Route = createFileRoute("/_authenticated/loan-rules")({
@@ -85,7 +86,15 @@ function Page() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  if (!r.isAdmin) return <div className="text-sm text-muted-foreground">Admins only.</div>;
+  if (r.isLoading) {
+    return (
+      <div className="py-16 text-center text-sm text-muted-foreground">Checking permissions…</div>
+    );
+  }
+
+  if (!r.isAdmin) {
+    return <UnauthorizedCard message="This page is restricted to administrators." />;
+  }
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">

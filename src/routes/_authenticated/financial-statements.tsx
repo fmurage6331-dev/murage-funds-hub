@@ -29,6 +29,7 @@ import {
   Leaf,
   CheckCircle2,
 } from "lucide-react";
+import { UnauthorizedCard } from "@/components/shared/UnauthorizedCard";
 import { useRoles } from "@/hooks/use-roles";
 
 export const Route = createFileRoute("/_authenticated/financial-statements")({
@@ -86,12 +87,14 @@ function FinancialStatementsPage() {
     },
   });
 
-  if (!r.isFinanceOfficer) {
+  if (r.isLoading) {
     return (
-      <div className="p-8 text-center text-sm text-muted-foreground">
-        Access restricted to authorized officers.
-      </div>
+      <div className="py-16 text-center text-sm text-muted-foreground">Checking permissions…</div>
     );
+  }
+
+  if (!r.isAdmin && !r.isTreasurer && !r.isChairman) {
+    return <UnauthorizedCard message="This page is restricted to officers." />;
   }
 
   // Date boundary calculation for selected period

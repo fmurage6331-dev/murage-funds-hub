@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/select";
 import { Check, X, PlusCircle, Search, Upload } from "lucide-react";
 import { toast } from "sonner";
+import { UnauthorizedCard } from "@/components/shared/UnauthorizedCard";
 import { useRoles } from "@/hooks/use-roles";
 import { notifyContributionReview } from "@/lib/notifications";
 import { ContributionImportPanel } from "@/components/contributions/ContributionImportPanel";
@@ -328,12 +329,14 @@ function Page() {
 
   const pendingActionId = setStatus.isPending ? setStatus.variables?.id : undefined;
 
-  if (!canReview) {
+  if (r.isLoading) {
     return (
-      <div className="text-sm text-muted-foreground">
-        Only the treasurer or admin can review contributions.
-      </div>
+      <div className="py-16 text-center text-sm text-muted-foreground">Checking permissions…</div>
     );
+  }
+
+  if (!r.isAdmin && !r.isTreasurer) {
+    return <UnauthorizedCard message="This page is restricted to treasurers." />;
   }
 
   return (

@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/table";
 import { ContributionImportPanel } from "@/components/contributions/ContributionImportPanel";
 import { adminAction } from "@/lib/admin-actions";
+import { UnauthorizedCard } from "@/components/shared/UnauthorizedCard";
 import { useRoles } from "@/hooks/use-roles";
 import { CheckCircle2, Download, FileSpreadsheet, Upload } from "lucide-react";
 import { toast } from "sonner";
@@ -81,7 +82,15 @@ function Page() {
     },
   });
 
-  if (!r.isAdmin) return <div className="text-sm text-muted-foreground">Admins only.</div>;
+  if (r.isLoading) {
+    return (
+      <div className="py-16 text-center text-sm text-muted-foreground">Checking permissions…</div>
+    );
+  }
+
+  if (!r.isAdmin) {
+    return <UnauthorizedCard message="This page is restricted to administrators." />;
+  }
 
   const officerRole = "admin";
 

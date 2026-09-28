@@ -45,6 +45,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import { toast } from "sonner";
+import { UnauthorizedCard } from "@/components/shared/UnauthorizedCard";
 import { useRoles } from "@/hooks/use-roles";
 import { useState } from "react";
 import type { Database } from "@/integrations/supabase/types";
@@ -305,7 +306,15 @@ function Page() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  if (!r.isAdmin) return <div className="text-sm text-muted-foreground">Admins only.</div>;
+  if (r.isLoading) {
+    return (
+      <div className="py-16 text-center text-sm text-muted-foreground">Checking permissions…</div>
+    );
+  }
+
+  if (!r.isAdmin) {
+    return <UnauthorizedCard message="This page is restricted to administrators." />;
+  }
 
   const totalPending = webPending.length + botPending.length;
 
