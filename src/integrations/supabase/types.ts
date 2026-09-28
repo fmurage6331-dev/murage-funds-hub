@@ -707,6 +707,15 @@ export type Database = {
         Returns: undefined;
       };
       board_majority_count: { Args: never; Returns: number };
+      complete_admin_approval: {
+        Args: {
+          actor_id?: string;
+          assigned_role: Database["public"]["Enums"]["app_role"];
+          registration_id?: string;
+          target_id: string;
+        };
+        Returns: undefined;
+      };
       has_any_role: {
         Args: {
           _roles: Database["public"]["Enums"]["app_role"][];
