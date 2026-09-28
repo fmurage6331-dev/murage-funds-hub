@@ -24,6 +24,7 @@ import { Route as AuthenticatedLoanVotesRouteImport } from './routes/_authentica
 import { Route as AuthenticatedLoansReviewRouteImport } from './routes/_authenticated/loans-review'
 import { Route as AuthenticatedMeetingsRouteImport } from './routes/_authenticated/meetings'
 import { Route as AuthenticatedMemberProfileRouteImport } from './routes/_authenticated/member-profile'
+import { Route as AuthenticatedMyAccountRouteImport } from './routes/_authenticated/my-account'
 import { Route as AuthenticatedMyContributionsRouteImport } from './routes/_authenticated/my-contributions'
 import { Route as AuthenticatedMyLoansRouteImport } from './routes/_authenticated/my-loans'
 import { Route as AuthenticatedTransactionsRouteImport } from './routes/_authenticated/transactions'
@@ -109,6 +110,11 @@ const AuthenticatedMemberProfileRoute =
     path: '/member-profile',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedMyAccountRoute = AuthenticatedMyAccountRouteImport.update({
+  id: '/my-account',
+  path: '/my-account',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedMyContributionsRoute =
   AuthenticatedMyContributionsRouteImport.update({
     id: '/my-contributions',
@@ -159,6 +165,7 @@ export interface FileRoutesByFullPath {
   '/loans-review': typeof AuthenticatedLoansReviewRoute
   '/meetings': typeof AuthenticatedMeetingsRoute
   '/member-profile': typeof AuthenticatedMemberProfileRouteWithChildren
+  '/my-account': typeof AuthenticatedMyAccountRoute
   '/my-contributions': typeof AuthenticatedMyContributionsRoute
   '/my-loans': typeof AuthenticatedMyLoansRoute
   '/transactions': typeof AuthenticatedTransactionsRoute
@@ -180,6 +187,7 @@ export interface FileRoutesByTo {
   '/loan-votes': typeof AuthenticatedLoanVotesRoute
   '/loans-review': typeof AuthenticatedLoansReviewRoute
   '/meetings': typeof AuthenticatedMeetingsRoute
+  '/my-account': typeof AuthenticatedMyAccountRoute
   '/my-contributions': typeof AuthenticatedMyContributionsRoute
   '/my-loans': typeof AuthenticatedMyLoansRoute
   '/transactions': typeof AuthenticatedTransactionsRoute
@@ -204,6 +212,7 @@ export interface FileRoutesById {
   '/_authenticated/loans-review': typeof AuthenticatedLoansReviewRoute
   '/_authenticated/meetings': typeof AuthenticatedMeetingsRoute
   '/_authenticated/member-profile': typeof AuthenticatedMemberProfileRouteWithChildren
+  '/_authenticated/my-account': typeof AuthenticatedMyAccountRoute
   '/_authenticated/my-contributions': typeof AuthenticatedMyContributionsRoute
   '/_authenticated/my-loans': typeof AuthenticatedMyLoansRoute
   '/_authenticated/transactions': typeof AuthenticatedTransactionsRoute
@@ -228,6 +237,7 @@ export interface FileRouteTypes {
     | '/loans-review'
     | '/meetings'
     | '/member-profile'
+    | '/my-account'
     | '/my-contributions'
     | '/my-loans'
     | '/transactions'
@@ -249,6 +259,7 @@ export interface FileRouteTypes {
     | '/loan-votes'
     | '/loans-review'
     | '/meetings'
+    | '/my-account'
     | '/my-contributions'
     | '/my-loans'
     | '/transactions'
@@ -272,6 +283,7 @@ export interface FileRouteTypes {
     | '/_authenticated/loans-review'
     | '/_authenticated/meetings'
     | '/_authenticated/member-profile'
+    | '/_authenticated/my-account'
     | '/_authenticated/my-contributions'
     | '/_authenticated/my-loans'
     | '/_authenticated/transactions'
@@ -394,6 +406,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMemberProfileRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/my-account': {
+      id: '/_authenticated/my-account'
+      path: '/my-account'
+      fullPath: '/my-account'
+      preLoaderRoute: typeof AuthenticatedMyAccountRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/my-contributions': {
       id: '/_authenticated/my-contributions'
       path: '/my-contributions'
@@ -468,6 +487,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedLoansReviewRoute: typeof AuthenticatedLoansReviewRoute
   AuthenticatedMeetingsRoute: typeof AuthenticatedMeetingsRoute
   AuthenticatedMemberProfileRoute: typeof AuthenticatedMemberProfileRouteWithChildren
+  AuthenticatedMyAccountRoute: typeof AuthenticatedMyAccountRoute
   AuthenticatedMyContributionsRoute: typeof AuthenticatedMyContributionsRoute
   AuthenticatedMyLoansRoute: typeof AuthenticatedMyLoansRoute
   AuthenticatedTransactionsRoute: typeof AuthenticatedTransactionsRoute
@@ -486,6 +506,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedLoansReviewRoute: AuthenticatedLoansReviewRoute,
   AuthenticatedMeetingsRoute: AuthenticatedMeetingsRoute,
   AuthenticatedMemberProfileRoute: AuthenticatedMemberProfileRouteWithChildren,
+  AuthenticatedMyAccountRoute: AuthenticatedMyAccountRoute,
   AuthenticatedMyContributionsRoute: AuthenticatedMyContributionsRoute,
   AuthenticatedMyLoansRoute: AuthenticatedMyLoansRoute,
   AuthenticatedTransactionsRoute: AuthenticatedTransactionsRoute,
