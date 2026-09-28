@@ -4,7 +4,7 @@ import { formatKES, sendMessage } from "../_shared/africastalking.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-const ADMIN_PHONE = "254182528510";
+const ADMIN_PHONE = Deno.env.get("ADMIN_WHATSAPP_NUMBER") ?? "254182528510";
 
 const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
@@ -13,7 +13,6 @@ type NotificationPayload =
       event: "submitted";
       memberName: string;
       amount: number;
-      paymentMethod: string;
       reference: string;
       installmentNumber: number;
       loanId: string;
@@ -24,7 +23,6 @@ type NotificationPayload =
       memberName: string;
       memberPhone?: string;
       amount: number;
-      paymentMethod?: string;
       reference?: string;
       installmentNumber: number;
       outstandingBalance?: number;
@@ -35,7 +33,6 @@ type NotificationPayload =
       memberName: string;
       memberPhone?: string;
       amount: number;
-      paymentMethod?: string;
       reference?: string;
       installmentNumber: number;
       reason: string;
@@ -60,7 +57,6 @@ function isNotificationPayload(value: unknown): value is NotificationPayload {
     return (
       hasString(value.memberName) &&
       typeof value.amount === "number" &&
-      hasString(value.paymentMethod) &&
       hasString(value.reference) &&
       typeof value.installmentNumber === "number" &&
       hasString(value.loanId)
@@ -139,9 +135,8 @@ Deno.serve(async (request: Request) => {
           `─────────────────────────\n` +
           `Member:      ${rawPayload.memberName}\n` +
           `Amount:      ${formatKES(rawPayload.amount)}\n` +
-          `Method:      ${rawPayload.paymentMethod}\n` +
           `Installment: #${rawPayload.installmentNumber}\n` +
-          `Reference:   ${rawPayload.reference}\n\n` +
+          `M-Pesa Ref:  ${rawPayload.reference}\n\n` +
           `Review at murage-funds-hub.vercel.app/loans-review`,
       });
       return response({ success: true });
@@ -161,9 +156,8 @@ Deno.serve(async (request: Request) => {
           `─────────────────────────\n` +
           `Hello ${rawPayload.memberName},\n` +
           `Amount:      ${formatKES(rawPayload.amount)}\n` +
-          `Method:      ${rawPayload.paymentMethod ?? "—"}\n` +
           `Installment: #${rawPayload.installmentNumber}\n` +
-          `Reference:   ${rawPayload.reference ?? "—"}\n` +
+          `M-Pesa Ref:  ${rawPayload.reference ?? "—"}\n` +
           `Outstanding: ${formatKES(rawPayload.outstandingBalance ?? 0)}\n\n` +
           `Murage Foundation`,
       });
@@ -175,7 +169,6 @@ Deno.serve(async (request: Request) => {
           `❌ Loan Payment Rejected\n` +
           `─────────────────────────\n` +
           `Hello ${rawPayload.memberName},\n` +
-          `Method:      ${rawPayload.paymentMethod ?? "—"}\n` +
           `Installment: #${rawPayload.installmentNumber}\n` +
           `Reference:   ${rawPayload.reference ?? "—"}\n` +
           `Reason:      ${rawPayload.reason}\n\n` +

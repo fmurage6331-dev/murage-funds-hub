@@ -48,14 +48,6 @@ const fmt = (n: number) =>
     maximumFractionDigits: 0,
   }).format(n);
 
-const fmtAmount = (n: number) =>
-  new Intl.NumberFormat("en-KE", {
-    style: "currency",
-    currency: "KES",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(n);
-
 type DashboardLoan = Tables<"loans"> & {
   loan_repayments: Tables<"loan_repayments">[];
 };
@@ -114,29 +106,6 @@ function Dashboard() {
       void supabase.removeChannel(channel);
     };
   }, [canReviewLoanPayments, queryClient]);
-
-  useEffect(() => {
-    if (isOfficer) return;
-
-    const channel = supabase
-      .channel(`dashboard-member-loan-payments-${user.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "loan_repayments",
-        },
-        () => {
-          void queryClient.invalidateQueries({ queryKey: ["my-loans", user.id] });
-        },
-      )
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [isOfficer, queryClient, user.id]);
 
   const { data: txs = [] } = useQuery({
     queryKey: ["transactions", "all"],
@@ -403,7 +372,7 @@ function Dashboard() {
                         <div>
                           <div className="font-medium">
                             Installment #{repayment.installment_number} ·{" "}
-                            {fmtAmount(Number(repayment.amount_due))}
+                            {fmt(Number(repayment.amount_due))}
                           </div>
                           <div className="text-xs text-muted-foreground">
                             Due {new Date(repayment.due_date).toLocaleDateString("en-KE")} ·{" "}

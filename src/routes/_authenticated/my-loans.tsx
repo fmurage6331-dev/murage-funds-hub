@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { Button } from "@/components/ui/button";
@@ -55,14 +55,6 @@ const fmt = (n: number) =>
     maximumFractionDigits: 0,
   }).format(n);
 
-const fmtAmount = (n: number) =>
-  new Intl.NumberFormat("en-KE", {
-    style: "currency",
-    currency: "KES",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(n);
-
 type MyLoan = Tables<"loans"> & {
   loan_repayments: Tables<"loan_repayments">[];
 };
@@ -72,13 +64,11 @@ type Repayment = Tables<"loan_repayments">;
 const statusColor = (status: string) =>
   status === "approved"
     ? "bg-success text-success-foreground"
-    : status === "completed"
-      ? "bg-emerald-600 text-white hover:bg-emerald-600"
-      : status === "rejected"
-        ? "bg-destructive/10 text-destructive"
-        : status === "forwarded"
-          ? "bg-primary/10 text-primary"
-          : "bg-gold/20 text-gold";
+    : status === "rejected"
+      ? "bg-destructive/10 text-destructive"
+      : status === "forwarded"
+        ? "bg-primary/10 text-primary"
+        : "bg-gold/20 text-gold";
 
 function isConfirmed(repayment: Repayment): boolean {
   return repayment.payment_status === "confirmed" || repayment.status === "paid";
@@ -176,11 +166,6 @@ function Page() {
         if (!Number.isInteger(months) || months <= 0) {
           throw new Error("Repayment period must be a positive whole number.");
         }
-        if (activeRules && months > Number(activeRules.max_repayment_months)) {
-          throw new Error(
-            `${form.loan_type === "project" ? "Project" : "Emergency"} loans can run for at most ${activeRules.max_repayment_months} months.`,
-          );
-        }
         if (!form.purpose.trim()) throw new Error("Purpose is required.");
 
         const { error } = await supabase.from("loans").insert({
@@ -235,14 +220,7 @@ function Page() {
                 <Select
                   value={form.loan_type}
                   onValueChange={(value: "project" | "emergency") =>
-                    setForm({
-                      ...form,
-                      loan_type: value,
-                      repayment_months:
-                        value === "emergency" && Number(form.repayment_months) > 6
-                          ? "6"
-                          : form.repayment_months,
-                    })
+                    setForm({ ...form, loan_type: value })
                   }
                 >
                   <SelectTrigger>
@@ -322,13 +300,11 @@ function Page() {
               const totalPaid = repayments
                 .filter(isConfirmed)
                 .reduce((sum, repayment) => sum + Number(repayment.amount_paid || 0), 0);
-              const scheduledTotal = repayments.reduce(
-                (sum, repayment) => sum + Number(repayment.amount_due),
-                0,
+              const outstanding = Math.max(0, Number(loan.amount) - totalPaid);
+              const progress = Math.min(
+                100,
+                Math.round((totalPaid / Math.max(1, Number(loan.amount))) * 100),
               );
-              const totalDue = repayments.length > 0 ? scheduledTotal : Number(loan.amount);
-              const outstanding = Math.max(0, totalDue - totalPaid);
-              const progress = Math.min(100, Math.round((totalPaid / Math.max(1, totalDue)) * 100));
               const overdue = repayments.some(
                 (repayment) => repayment.status === "overdue" && !isConfirmed(repayment),
               );
@@ -373,11 +349,11 @@ function Page() {
                       </div>
                       <div>
                         <div className="text-xs text-muted-foreground">Total paid</div>
-                        <div className="font-semibold text-emerald-600">{fmtAmount(totalPaid)}</div>
+                        <div className="font-semibold text-emerald-600">{fmt(totalPaid)}</div>
                       </div>
                       <div>
                         <div className="text-xs text-muted-foreground">Outstanding</div>
-                        <div className="font-semibold text-rose-600">{fmtAmount(outstanding)}</div>
+                        <div className="font-semibold text-rose-600">{fmt(outstanding)}</div>
                       </div>
                       <div>
                         <div className="text-xs text-muted-foreground">Interest rate</div>
@@ -385,7 +361,7 @@ function Page() {
                       </div>
                       <div>
                         <div className="text-xs text-muted-foreground">Monthly payment</div>
-                        <div className="font-semibold">{fmtAmount(monthlyAmount)}</div>
+                        <div className="font-semibold">{fmt(monthlyAmount)}</div>
                       </div>
                     </div>
 
@@ -424,7 +400,7 @@ function Page() {
                           <div className="text-xs font-medium">Next payment due</div>
                           <div className="text-sm font-semibold">
                             {next
-                              ? `${new Date(next.due_date).toLocaleDateString("en-KE")} · ${fmtAmount(Number(next.amount_due))}`
+                              ? `${new Date(next.due_date).toLocaleDateString("en-KE")} · ${fmt(Number(next.amount_due))}`
                               : "All installments paid"}
                           </div>
                           {paymentIsPending && (
@@ -529,10 +505,10 @@ function Page() {
                     {fmt(Number(loan.amount))}
                   </TableCell>
                   <TableCell className="text-center">
-                    {loan.status === "approved" || loan.status === "completed" ? (
+                    {loan.status === "approved" ? (
                       <RepaymentScheduleDialog
                         loan={loan}
-                        canSubmitPayment={loan.status === "approved"}
+                        canSubmitPayment
                         memberEmail={user.email ?? undefined}
                         triggerButton={
                           <Button variant="outline" size="sm" className="h-8 gap-1 text-xs">

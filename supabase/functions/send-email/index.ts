@@ -22,7 +22,7 @@ interface EmailNotificationPayload {
     | "loan_payment_confirmed"
     | "loan_payment_rejected"
     | "password_reset";
-  data: Record<string, unknown>;
+  data: Record<string, any>;
 }
 
 // Member-supplied values (names) and generated links are escaped before hitting the HTML body.
@@ -100,15 +100,7 @@ function generateHtmlEmail(template: string, data: Record<string, unknown>): str
     }
 
     case "loan_payment_submitted": {
-      const {
-        memberName,
-        amount,
-        paymentMethod,
-        reference,
-        installmentNumber,
-        submittedAt,
-        adminPhone,
-      } = data;
+      const { memberName, amount, reference, installmentNumber, submittedAt, adminPhone } = data;
       contentHtml = `
         <h2 style="color: ${brandColor}; margin-top: 0;">Loan Payment Awaiting Confirmation</h2>
         <p>A member has submitted a loan repayment for treasury review:</p>
@@ -116,8 +108,7 @@ function generateHtmlEmail(template: string, data: Record<string, unknown>): str
           <p style="margin: 0 0 8px 0;"><strong>Member:</strong> ${memberName || "Member"}</p>
           <p style="margin: 0 0 8px 0;"><strong>Amount:</strong> KES ${Number(amount || 0).toLocaleString()}</p>
           <p style="margin: 0 0 8px 0;"><strong>Installment:</strong> #${installmentNumber || "—"}</p>
-          <p style="margin: 0 0 8px 0;"><strong>Payment method:</strong> ${paymentMethod || "—"}</p>
-          <p style="margin: 0 0 8px 0;"><strong>Reference:</strong> ${reference || "—"}</p>
+          <p style="margin: 0 0 8px 0;"><strong>M-Pesa Reference:</strong> ${reference || "—"}</p>
           <p style="margin: 0;"><strong>Submitted:</strong> ${submittedAt || "—"}</p>
         </div>
         <p>Review and confirm the payment in the Loans Review queue. SMS/WhatsApp contact: ${adminPhone || "254182528510"}.</p>
@@ -126,24 +117,16 @@ function generateHtmlEmail(template: string, data: Record<string, unknown>): str
     }
 
     case "loan_payment_confirmed": {
-      const {
-        memberName,
-        amount,
-        paymentMethod,
-        reference,
-        installmentNumber,
-        outstandingBalance,
-        confirmedAt,
-      } = data;
+      const { memberName, amount, reference, installmentNumber, outstandingBalance, confirmedAt } =
+        data;
       contentHtml = `
         <h2 style="color: ${brandColor}; margin-top: 0;">Loan Payment Confirmed</h2>
         <p>Dear ${memberName || "Member"},</p>
         <p>Your repayment has been confirmed by the Murage Foundation treasury:</p>
         <div style="background-color: #f9fafb; border-left: 4px solid #16a34a; padding: 16px; margin: 20px 0; border-radius: 4px;">
           <p style="margin: 0 0 8px 0;"><strong>Amount confirmed:</strong> KES ${Number(amount || 0).toLocaleString()}</p>
-          <p style="margin: 0 0 8px 0;"><strong>Payment method:</strong> ${paymentMethod || "—"}</p>
           <p style="margin: 0 0 8px 0;"><strong>Installment:</strong> #${installmentNumber || "—"}</p>
-          <p style="margin: 0 0 8px 0;"><strong>Payment reference:</strong> ${reference || "—"}</p>
+          <p style="margin: 0 0 8px 0;"><strong>M-Pesa Reference:</strong> ${reference || "—"}</p>
           <p style="margin: 0;"><strong>New outstanding balance:</strong> KES ${Number(outstandingBalance || 0).toLocaleString()}</p>
         </div>
         <p>Confirmed at ${confirmedAt || "—"}. You can view your updated repayment schedule in My Loans.</p>
@@ -152,22 +135,13 @@ function generateHtmlEmail(template: string, data: Record<string, unknown>): str
     }
 
     case "loan_payment_rejected": {
-      const {
-        memberName,
-        amount,
-        paymentMethod,
-        reference,
-        installmentNumber,
-        reason,
-        adminPhone,
-      } = data;
+      const { memberName, amount, reference, installmentNumber, reason, adminPhone } = data;
       contentHtml = `
         <h2 style="color: ${brandColor}; margin-top: 0;">Loan Payment Needs Attention</h2>
         <p>Dear ${memberName || "Member"},</p>
         <p>Your submitted loan repayment could not be confirmed:</p>
         <div style="background-color: #f9fafb; border-left: 4px solid #dc2626; padding: 16px; margin: 20px 0; border-radius: 4px;">
           <p style="margin: 0 0 8px 0;"><strong>Amount submitted:</strong> KES ${Number(amount || 0).toLocaleString()}</p>
-          <p style="margin: 0 0 8px 0;"><strong>Payment method:</strong> ${paymentMethod || "—"}</p>
           <p style="margin: 0 0 8px 0;"><strong>Installment:</strong> #${installmentNumber || "—"}</p>
           <p style="margin: 0 0 8px 0;"><strong>Reference:</strong> ${reference || "—"}</p>
           <p style="margin: 0;"><strong>Reason:</strong> ${reason || "Please contact the treasurer."}</p>
