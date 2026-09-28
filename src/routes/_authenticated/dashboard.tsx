@@ -2,6 +2,8 @@ import { PaymentInfoCard } from "@/components/shared/PaymentInfoCard";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useRoles } from "@/hooks/use-roles";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -12,6 +14,8 @@ import {
   AlertTriangle,
   ShieldAlert,
   ArrowRight,
+  HandCoins,
+  Hourglass,
 } from "lucide-react";
 import {
   BarChart,
@@ -38,8 +42,14 @@ const fmt = (n: number) =>
   }).format(n);
 
 function Dashboard() {
+  const { user } = Route.useRouteContext();
+  const r = useRoles(user.id);
+  // Members get their own numbers only; officers see the foundation view.
+  const isOfficer = r.isOfficer;
+
   const { data: txs = [] } = useQuery({
     queryKey: ["transactions", "all"],
+    enabled: isOfficer,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("transactions")
@@ -51,6 +61,7 @@ function Dashboard() {
   });
   const { data: donorCount = 0 } = useQuery({
     queryKey: ["donors", "count"],
+    enabled: isOfficer,
     queryFn: async () => {
       const { count } = await supabase.from("donors").select("*", { count: "exact", head: true });
       return count ?? 0;
@@ -59,6 +70,7 @@ function Dashboard() {
 
   const { data: riskLoans = [] } = useQuery({
     queryKey: ["loan_risk_flags"],
+    enabled: isOfficer,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("loan_risk_flags")
@@ -70,6 +82,44 @@ function Dashboard() {
         return [];
       }
       return data ?? [];
+    },
+  });
+
+  const { data: myContributions = [] } = useQuery({
+    queryKey: ["my-contribs", user.id],
+    enabled: !isOfficer,
+    queryFn: async () => {
+      try {
+        const { data, error } = await supabase
+          .from("contributions")
+          .select("*")
+          .eq("member_id", user.id)
+          .order("contributed_on", { ascending: false });
+        if (error) throw error;
+        return data ?? [];
+      } catch (error) {
+        console.error("Failed to load your contributions", error);
+        return [];
+      }
+    },
+  });
+
+  const { data: myLoans = [] } = useQuery({
+    queryKey: ["my-loans", user.id],
+    enabled: !isOfficer,
+    queryFn: async () => {
+      try {
+        const { data, error } = await supabase
+          .from("loans")
+          .select("*, loan_repayments(*)")
+          .eq("member_id", user.id)
+          .order("created_at", { ascending: false });
+        if (error) throw error;
+        return data ?? [];
+      } catch (error) {
+        console.error("Failed to load your loans", error);
+        return [];
+      }
     },
   });
 
@@ -137,6 +187,96 @@ function Dashboard() {
   ];
 
   const recent = txs.slice(0, 6);
+
+  if (r.isLoading) {
+    return (
+      <div className="py-16 text-center text-sm text-muted-foreground">Loading your dashboard…</div>
+    );
+  }
+
+  if (!isOfficer) {
+    const confirmed = myContributions
+      .filter((c) => c.status === "confirmed")
+      .reduce((sum, c) => sum + Number(c.amount), 0);
+    const pending = myContributions
+      .filter((c) => c.status === "pending")
+      .reduce((sum, c) => sum + Number(c.amount), 0);
+    const activeLoans = myLoans.filter((l) => l.status === "approved");
+    const outstanding = activeLoans.reduce((sum, loan) => {
+      const repayments = loan.loan_repayments ?? [];
+      const due = repayments.reduce((s, x) => s + Number(x.amount_due), 0);
+      const paid = repayments.reduce((s, x) => s + Number(x.amount_paid), 0);
+      return sum + Math.max(0, due - paid);
+    }, 0);
+
+    const myStats = [
+      {
+        label: "My confirmed contributions",
+        value: fmt(confirmed),
+        icon: Wallet,
+        tone: "text-success",
+      },
+      {
+        label: "Awaiting confirmation",
+        value: fmt(pending),
+        icon: Hourglass,
+        tone: "text-gold",
+      },
+      {
+        label: "Active loans",
+        value: String(activeLoans.length),
+        icon: HandCoins,
+        tone: "text-primary",
+      },
+      {
+        label: "Loan balance outstanding",
+        value: fmt(outstanding),
+        icon: ArrowDownRight,
+        tone: outstanding > 0 ? "text-destructive" : "text-primary",
+      },
+    ];
+
+    return (
+      <div className="mx-auto max-w-6xl space-y-6">
+        <PaymentInfoCard />
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {myStats.map((s) => (
+            <Card key={s.label}>
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs uppercase tracking-wider text-muted-foreground">
+                    {s.label}
+                  </div>
+                  <s.icon className={`h-4 w-4 ${s.tone}`} />
+                </div>
+                <div className={`mt-2 font-serif text-2xl font-semibold ${s.tone}`}>{s.value}</div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="font-serif">Your records</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-3">
+            <Button asChild variant="outline">
+              <Link to="/my-contributions">My contributions</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link to="/my-loans">My loans</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link to="/meetings">Meetings</Link>
+            </Button>
+            <Button asChild>
+              <Link to="/my-account">My account</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
