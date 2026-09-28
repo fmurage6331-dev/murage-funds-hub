@@ -131,3 +131,76 @@
   }
   h1, h2, h3, .font-serif { font-family: var(--font-serif); }
 }
+
+/* ─── Financial statement print / PDF styles ─────────────────────────── */
+@media print {
+  @page {
+    size: A4;
+    margin: 18mm 14mm 20mm;
+    @top-left {
+      content: "MURAGE FOUNDATION";
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 8pt;
+    }
+    @top-right {
+      content: "CONFIDENTIAL";
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 8pt;
+      font-weight: bold;
+      letter-spacing: 0.15em;
+    }
+    @bottom-left {
+      content: "KCB Bank Kenya • Paybill: 522522 • Account: 7989164";
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 8pt;
+    }
+    @bottom-right {
+      content: "Page " counter(page) " of " counter(pages);
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 8pt;
+    }
+  }
+
+  body:has(.financial-statement-page) [data-sidebar],
+  body:has(.financial-statement-page) [data-slot="sidebar"],
+  body:has(.financial-statement-page) [data-slot="sidebar-gap"],
+  body:has(.financial-statement-page) header,
+  body:has(.financial-statement-page) nav,
+  body:has(.financial-statement-page) button {
+    display: none !important;
+  }
+  body:has(.financial-statement-page) main {
+    padding: 0 !important;
+  }
+
+  .financial-statement-page,
+  .financial-statement-page * {
+    font-family: Georgia, "Times New Roman", serif !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .financial-statement-page .font-mono {
+    font-family: "Courier New", monospace !important;
+  }
+  .financial-statement-page .statement-section + .statement-section {
+    break-before: page;
+  }
+  .financial-statement-page .statement-section tr,
+  .financial-statement-page .statement-section [class*="rounded"] {
+    break-inside: avoid;
+  }
+  .print-running-header {
+    justify-content: space-between;
+    font-size: 8pt;
+    border-bottom: 1px solid #94a3b8;
+    padding-bottom: 4px;
+    margin-bottom: 8px;
+  }
+  .print-running-footer {
+    font-size: 8pt;
+    text-align: center;
+    border-top: 1px solid #94a3b8;
+    padding-top: 4px;
+    margin-top: 12px;
+  }
+}
