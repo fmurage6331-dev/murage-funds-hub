@@ -449,27 +449,31 @@ function Page() {
 
   const forward = useMutation({
     mutationFn: async ({ id, loan }: { id: string; loan?: LoanRow }) => {
-      const { error } = await supabase
-        .from("loans")
-        .update({
-          status: "forwarded",
-          forwarded_by: user.id,
-          forwarded_at: new Date().toISOString(),
-        })
-        .eq("id", id);
-      if (error) throw error;
+      try {
+        const { error } = await supabase
+          .from("loans")
+          .update({
+            status: "forwarded",
+            forwarded_by: user.id,
+            forwarded_at: new Date().toISOString(),
+          })
+          .eq("id", id);
+        if (error) throw error;
 
-      if (loan?.profiles?.email) {
-        void notifyLoanStatusChange({
-          memberEmail: loan.profiles.email,
-          memberName: loan.profiles.full_name ?? undefined,
-          loanAmount: Number(loan.amount),
-          loanType: loan.loan_type,
-          status: "forwarded",
-          repaymentMonths: loan.repayment_months,
-        }).catch((error: unknown) =>
-          console.warn("Failed sending loan status notification", error),
-        );
+        if (loan?.profiles?.email) {
+          void notifyLoanStatusChange({
+            memberEmail: loan.profiles.email,
+            memberName: loan.profiles.full_name ?? undefined,
+            loanAmount: Number(loan.amount),
+            loanType: loan.loan_type,
+            status: "forwarded",
+            repaymentMonths: loan.repayment_months,
+          }).catch((error: unknown) =>
+            console.warn("Failed sending loan status notification", error),
+          );
+        }
+      } catch (error) {
+        throw error instanceof Error ? error : new Error("Could not forward this loan.");
       }
     },
     onSuccess: () => {
@@ -481,30 +485,34 @@ function Page() {
 
   const rejectLoan = useMutation({
     mutationFn: async ({ id, loan }: { id: string; loan?: LoanRow }) => {
-      const reason = window.prompt("Rejection reason?") ?? "";
-      if (!reason) throw new Error("Reason required");
-      const { error } = await supabase
-        .from("loans")
-        .update({
-          status: "rejected",
-          decision_at: new Date().toISOString(),
-          rejection_reason: reason,
-        })
-        .eq("id", id);
-      if (error) throw error;
+      try {
+        const reason = window.prompt("Rejection reason?") ?? "";
+        if (!reason) throw new Error("Reason required");
+        const { error } = await supabase
+          .from("loans")
+          .update({
+            status: "rejected",
+            decision_at: new Date().toISOString(),
+            rejection_reason: reason,
+          })
+          .eq("id", id);
+        if (error) throw error;
 
-      if (loan?.profiles?.email) {
-        void notifyLoanStatusChange({
-          memberEmail: loan.profiles.email,
-          memberName: loan.profiles.full_name ?? undefined,
-          loanAmount: Number(loan.amount),
-          loanType: loan.loan_type,
-          status: "rejected",
-          reason,
-          repaymentMonths: loan.repayment_months,
-        }).catch((error: unknown) =>
-          console.warn("Failed sending loan status notification", error),
-        );
+        if (loan?.profiles?.email) {
+          void notifyLoanStatusChange({
+            memberEmail: loan.profiles.email,
+            memberName: loan.profiles.full_name ?? undefined,
+            loanAmount: Number(loan.amount),
+            loanType: loan.loan_type,
+            status: "rejected",
+            reason,
+            repaymentMonths: loan.repayment_months,
+          }).catch((error: unknown) =>
+            console.warn("Failed sending loan status notification", error),
+          );
+        }
+      } catch (error) {
+        throw error instanceof Error ? error : new Error("Could not reject this loan.");
       }
     },
     onSuccess: () => {
@@ -518,23 +526,27 @@ function Page() {
 
   const approve = useMutation({
     mutationFn: async ({ id, loan }: { id: string; loan: LoanRow }) => {
-      const { error } = await supabase
-        .from("loans")
-        .update({ status: "approved", decision_at: new Date().toISOString() })
-        .eq("id", id);
-      if (error) throw error;
+      try {
+        const { error } = await supabase
+          .from("loans")
+          .update({ status: "approved", decision_at: new Date().toISOString() })
+          .eq("id", id);
+        if (error) throw error;
 
-      if (loan.profiles?.email) {
-        void notifyLoanStatusChange({
-          memberEmail: loan.profiles.email,
-          memberName: loan.profiles.full_name ?? undefined,
-          loanAmount: Number(loan.amount),
-          loanType: loan.loan_type,
-          status: "approved",
-          repaymentMonths: loan.repayment_months,
-        }).catch((error: unknown) =>
-          console.warn("Failed sending loan status notification", error),
-        );
+        if (loan.profiles?.email) {
+          void notifyLoanStatusChange({
+            memberEmail: loan.profiles.email,
+            memberName: loan.profiles.full_name ?? undefined,
+            loanAmount: Number(loan.amount),
+            loanType: loan.loan_type,
+            status: "approved",
+            repaymentMonths: loan.repayment_months,
+          }).catch((error: unknown) =>
+            console.warn("Failed sending loan status notification", error),
+          );
+        }
+      } catch (error) {
+        throw error instanceof Error ? error : new Error("Could not approve this loan.");
       }
     },
     onSuccess: () => {
