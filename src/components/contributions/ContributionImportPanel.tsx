@@ -128,7 +128,7 @@ export function ContributionImportPanel({ members, existingRefs, officerId, offi
     setImporting(false);
     if (imported > 0) {
       toast.success(`Imported ${imported} contribution${imported === 1 ? "" : "s"}.`);
-      qc.invalidateQueries({ queryKey: ["contribs"] });
+      qc.invalidateQueries({ queryKey: ["contributions-review"] });
     }
     if (failed > 0) toast.error(`${failed} row(s) failed to import.`);
   };

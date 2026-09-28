@@ -204,7 +204,7 @@ function Page() {
       setContribNotes("");
       qc.invalidateQueries({ queryKey: ["member-profile-contributions", memberId] });
       qc.invalidateQueries({ queryKey: ["member-profile", memberId] });
-      qc.invalidateQueries({ queryKey: ["contribs"] });
+      qc.invalidateQueries({ queryKey: ["contributions-review"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });

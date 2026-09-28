@@ -96,7 +96,7 @@ function AuthedLayout() {
   const financeItems: Item[] = [];
   if (r.isFinanceOfficer)
     financeItems.push({ title: "Dashboard", url: "/dashboard", icon: LayoutDashboard });
-  if ((r.isAdmin || r.isTreasurer))
+  if (r.isAdmin || r.isTreasurer)
     financeItems.push({
       title: "Contributions Review",
       url: "/contributions-review",
