@@ -40,6 +40,7 @@ import {
   Gavel,
   ScrollText,
   FileSpreadsheet,
+  User,
   UserCircle,
   Database,
 } from "lucide-react";
@@ -85,50 +86,76 @@ function AuthedLayout() {
     }
   };
 
-  type Item = { title: string; url: string; icon: typeof LayoutDashboard };
+  type Item = {
+    title: string;
+    url: string;
+    icon: typeof LayoutDashboard;
+    /** Small muted qualifier shown after the title (e.g. "view only"). */
+    hint?: string;
+  };
+  type Section = { label: string; items: Item[] };
 
-  const memberItems: Item[] = [
-    { title: "My Contributions", url: "/my-contributions", icon: Wallet },
-    { title: "My Loans", url: "/my-loans", icon: HandCoins },
-    { title: "Meetings", url: "/meetings", icon: CalendarDays },
-  ];
+  // A user with no officer role at all (or who also carries the member role)
+  // still needs their own records.
+  const seesOwnRecords = !r.isOfficer || r.isMember;
 
-  const financeItems: Item[] = [];
-  if (r.isFinanceOfficer)
-    financeItems.push({ title: "Dashboard", url: "/dashboard", icon: LayoutDashboard });
-  if (r.isAdmin || r.isTreasurer)
-    financeItems.push({
+  // ── "My Account" — visible to every role ──────────────────────────────
+  const accountItems: Item[] = [{ title: "Dashboard", url: "/dashboard", icon: LayoutDashboard }];
+  if (seesOwnRecords) {
+    accountItems.push({ title: "My Contributions", url: "/my-contributions", icon: Wallet });
+    accountItems.push({ title: "My Loans", url: "/my-loans", icon: HandCoins });
+  }
+  accountItems.push({
+    title: "Meetings",
+    url: "/meetings",
+    icon: CalendarDays,
+    // Secretariat owns meetings; everyone else may only read them.
+    hint: r.isSecretariat ? undefined : "view only",
+  });
+  accountItems.push({ title: "My Account", url: "/my-account", icon: User });
+
+  // ── "Management" — officer roles ──────────────────────────────────────
+  const managementItems: Item[] = [];
+  if (r.isAdmin || r.isTreasurer) {
+    managementItems.push({
       title: "Contributions Review",
       url: "/contributions-review",
       icon: ShieldCheck,
     });
-  if (r.isAdmin || r.isTreasurer || r.isChairman)
-    financeItems.push({ title: "Member Profiles", url: "/member-profile", icon: UserCircle });
-  if (r.isFinanceOfficer)
-    financeItems.push({ title: "Transactions", url: "/transactions", icon: Receipt });
-  if (r.isFinanceOfficer)
-    financeItems.push({
+    managementItems.push({ title: "Transactions", url: "/transactions", icon: Receipt });
+  }
+  if (r.isFinanceOfficer) {
+    managementItems.push({ title: "Loans Review", url: "/loans-review", icon: Landmark });
+    managementItems.push({
       title: "Financial Statements",
       url: "/financial-statements",
       icon: FileSpreadsheet,
     });
-  if (r.isFinanceOfficer || r.isBoardMember || r.isAdmin)
-    financeItems.push({ title: "Loan Requests", url: "/loans-review", icon: Landmark });
-  if (r.isBoardMember || r.isAdmin)
-    financeItems.push({ title: "Board Votes", url: "/loan-votes", icon: Gavel });
-  if (r.isSecretariat || r.isAdmin)
-    financeItems.push({ title: "Donors", url: "/donors", icon: Users });
-  if (r.isFinanceOfficer || r.isAdmin)
-    financeItems.push({ title: "Audit Trail", url: "/audit-logs", icon: ScrollText });
+    managementItems.push({ title: "Member Profiles", url: "/member-profile", icon: UserCircle });
+    managementItems.push({ title: "Audit Logs", url: "/audit-logs", icon: ScrollText });
+  }
+  if (r.isSecretariat) {
+    managementItems.push({ title: "Donors", url: "/donors", icon: Users });
+  }
+  if (r.isAdmin || r.isBoardMember || r.isChairman) {
+    managementItems.push({ title: "Loan Votes", url: "/loan-votes", icon: Gavel });
+  }
 
+  // ── "Administration" — admin only ─────────────────────────────────────
   const adminItems: Item[] = [];
   if (r.isAdmin) {
     adminItems.push({ title: "Users & Roles", url: "/users", icon: Users });
-    adminItems.push({ title: "Data Import", url: "/data-import", icon: Database });
     adminItems.push({ title: "Loan Rules", url: "/loan-rules", icon: Settings });
+    adminItems.push({ title: "Data Import", url: "/data-import", icon: Database });
   }
 
-  const allItems = [...memberItems, ...financeItems, ...adminItems];
+  const sections: Section[] = [
+    { label: "My Account", items: accountItems },
+    ...(managementItems.length > 0 ? [{ label: "Management", items: managementItems }] : []),
+    ...(adminItems.length > 0 ? [{ label: "Administration", items: adminItems }] : []),
+  ];
+
+  const allItems = sections.flatMap((section) => section.items);
   const isActiveItem = (url: string) => path === url || path.startsWith(`${url}/`);
   const activeTitle = allItems.find((i) => isActiveItem(i.url))?.title ?? "Overview";
 
@@ -153,35 +180,22 @@ function AuthedLayout() {
           </SidebarHeader>
 
           <SidebarContent>
-            <SidebarGroup>
-              <SidebarGroupLabel>My Account</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {memberItems.map((item) => (
-                    <SidebarMenuItem key={item.url}>
-                      <SidebarMenuButton asChild isActive={isActiveItem(item.url)}>
-                        <Link to={item.url} className="flex items-center gap-2">
-                          <item.icon className="h-4 w-4" />
-                          <span>{item.title}</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-
-            {financeItems.length > 0 && (
-              <SidebarGroup>
-                <SidebarGroupLabel>Foundation</SidebarGroupLabel>
+            {sections.map((section) => (
+              <SidebarGroup key={section.label}>
+                <SidebarGroupLabel>{section.label}</SidebarGroupLabel>
                 <SidebarGroupContent>
                   <SidebarMenu>
-                    {financeItems.map((item) => (
+                    {section.items.map((item) => (
                       <SidebarMenuItem key={item.url}>
                         <SidebarMenuButton asChild isActive={isActiveItem(item.url)}>
                           <Link to={item.url} className="flex items-center gap-2">
                             <item.icon className="h-4 w-4" />
                             <span>{item.title}</span>
+                            {item.hint && (
+                              <span className="ml-auto text-[10px] text-sidebar-foreground/50 group-data-[collapsible=icon]:hidden">
+                                {item.hint}
+                              </span>
+                            )}
                           </Link>
                         </SidebarMenuButton>
                       </SidebarMenuItem>
@@ -189,27 +203,7 @@ function AuthedLayout() {
                   </SidebarMenu>
                 </SidebarGroupContent>
               </SidebarGroup>
-            )}
-
-            {adminItems.length > 0 && (
-              <SidebarGroup>
-                <SidebarGroupLabel>Admin</SidebarGroupLabel>
-                <SidebarGroupContent>
-                  <SidebarMenu>
-                    {adminItems.map((item) => (
-                      <SidebarMenuItem key={item.url}>
-                        <SidebarMenuButton asChild isActive={isActiveItem(item.url)}>
-                          <Link to={item.url} className="flex items-center gap-2">
-                            <item.icon className="h-4 w-4" />
-                            <span>{item.title}</span>
-                          </Link>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    ))}
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              </SidebarGroup>
-            )}
+            ))}
           </SidebarContent>
 
           <SidebarFooter className="border-t border-sidebar-border">
