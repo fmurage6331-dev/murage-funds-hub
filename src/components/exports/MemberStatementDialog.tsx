@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { FileText, Loader2 } from "lucide-react";
+import { FileSpreadsheet, FileText, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -21,19 +21,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { downloadCsv } from "@/lib/csv-import";
 import {
   ALL_STATEMENT_SECTIONS,
+  buildMemberStatementCsv,
   buildMemberStatementHtml,
   openPrintWindow,
   PERIOD_OPTIONS,
   periodSelectionError,
   resolvePeriod,
+  statementFileName,
   type PeriodKey,
   type StatementSections,
 } from "@/lib/export-documents";
 import { loadMemberStatementData } from "@/lib/financial-data";
 
-type StatementFormat = "pdf";
+type StatementFormat = "pdf" | "csv";
 
 const SECTION_OPTIONS: Array<{ key: keyof StatementSections; label: string }> = [
   { key: "contributions", label: "Contribution History" },
@@ -129,6 +132,12 @@ export function MemberStatementDialog({
       toast.success("Statement opened — print or save it as PDF.");
       return;
     }
+
+    downloadCsv(
+      statementFileName(data.profile?.full_name ?? memberName),
+      buildMemberStatementCsv(data, options),
+    );
+    toast.success("Statement downloaded as CSV (opens in Excel).");
   };
 
   return (
@@ -191,6 +200,7 @@ export function MemberStatementDialog({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="pdf">PDF Statement</SelectItem>
+                <SelectItem value="csv">Excel / CSV</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -231,8 +241,12 @@ export function MemberStatementDialog({
             Cancel
           </Button>
           <Button onClick={handleGenerate} disabled={isLoading || !data} className="gap-2">
-            <FileText className="h-4 w-4" />
-            Generate PDF
+            {format === "pdf" ? (
+              <FileText className="h-4 w-4" />
+            ) : (
+              <FileSpreadsheet className="h-4 w-4" />
+            )}
+            {format === "pdf" ? "Generate PDF" : "Generate Excel"}
           </Button>
         </DialogFooter>
       </DialogContent>
