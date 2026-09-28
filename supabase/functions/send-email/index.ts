@@ -16,7 +16,13 @@ interface EmailNotificationPayload {
   to: string | string[];
   subject: string;
   template:
-    "loan_status_changed" | "contribution_reviewed" | "meeting_scheduled" | "password_reset";
+    | "loan_status_changed"
+    | "contribution_reviewed"
+    | "meeting_scheduled"
+    | "loan_payment_submitted"
+    | "loan_payment_confirmed"
+    | "loan_payment_rejected"
+    | "password_reset";
   data: Record<string, any>;
 }
 
@@ -84,6 +90,58 @@ function generateHtmlEmail(template: string, data: Record<string, any>): string 
           ${notes ? `<p style="margin: 0; color: #6b7280;"><strong>Treasury Note:</strong> ${notes}</p>` : ""}
         </div>
         <p>Thank you for your active stewardship and continued commitment to the Murage Foundation.</p>
+      `;
+      break;
+    }
+
+    case "loan_payment_submitted": {
+      const { memberName, amount, reference, installmentNumber, submittedAt, adminPhone } = data;
+      contentHtml = `
+        <h2 style="color: ${brandColor}; margin-top: 0;">Loan Payment Awaiting Confirmation</h2>
+        <p>A member has submitted a loan repayment for treasury review:</p>
+        <div style="background-color: #f9fafb; border-left: 4px solid ${accentColor}; padding: 16px; margin: 20px 0; border-radius: 4px;">
+          <p style="margin: 0 0 8px 0;"><strong>Member:</strong> ${memberName || "Member"}</p>
+          <p style="margin: 0 0 8px 0;"><strong>Amount:</strong> KES ${Number(amount || 0).toLocaleString()}</p>
+          <p style="margin: 0 0 8px 0;"><strong>Installment:</strong> #${installmentNumber || "—"}</p>
+          <p style="margin: 0 0 8px 0;"><strong>M-Pesa Reference:</strong> ${reference || "—"}</p>
+          <p style="margin: 0;"><strong>Submitted:</strong> ${submittedAt || "—"}</p>
+        </div>
+        <p>Review and confirm the payment in the Loans Review queue. SMS/WhatsApp contact: ${adminPhone || "254182528510"}.</p>
+      `;
+      break;
+    }
+
+    case "loan_payment_confirmed": {
+      const { memberName, amount, reference, installmentNumber, outstandingBalance, confirmedAt } =
+        data;
+      contentHtml = `
+        <h2 style="color: ${brandColor}; margin-top: 0;">Loan Payment Confirmed</h2>
+        <p>Dear ${memberName || "Member"},</p>
+        <p>Your repayment has been confirmed by the Murage Foundation treasury:</p>
+        <div style="background-color: #f9fafb; border-left: 4px solid #16a34a; padding: 16px; margin: 20px 0; border-radius: 4px;">
+          <p style="margin: 0 0 8px 0;"><strong>Amount confirmed:</strong> KES ${Number(amount || 0).toLocaleString()}</p>
+          <p style="margin: 0 0 8px 0;"><strong>Installment:</strong> #${installmentNumber || "—"}</p>
+          <p style="margin: 0 0 8px 0;"><strong>M-Pesa Reference:</strong> ${reference || "—"}</p>
+          <p style="margin: 0;"><strong>New outstanding balance:</strong> KES ${Number(outstandingBalance || 0).toLocaleString()}</p>
+        </div>
+        <p>Confirmed at ${confirmedAt || "—"}. You can view your updated repayment schedule in My Loans.</p>
+      `;
+      break;
+    }
+
+    case "loan_payment_rejected": {
+      const { memberName, amount, reference, installmentNumber, reason, adminPhone } = data;
+      contentHtml = `
+        <h2 style="color: ${brandColor}; margin-top: 0;">Loan Payment Needs Attention</h2>
+        <p>Dear ${memberName || "Member"},</p>
+        <p>Your submitted loan repayment could not be confirmed:</p>
+        <div style="background-color: #f9fafb; border-left: 4px solid #dc2626; padding: 16px; margin: 20px 0; border-radius: 4px;">
+          <p style="margin: 0 0 8px 0;"><strong>Amount submitted:</strong> KES ${Number(amount || 0).toLocaleString()}</p>
+          <p style="margin: 0 0 8px 0;"><strong>Installment:</strong> #${installmentNumber || "—"}</p>
+          <p style="margin: 0 0 8px 0;"><strong>Reference:</strong> ${reference || "—"}</p>
+          <p style="margin: 0;"><strong>Reason:</strong> ${reason || "Please contact the treasurer."}</p>
+        </div>
+        <p>Check the reference and resubmit the payment from My Loans. Need help? Contact ${adminPhone || "254182528510"}.</p>
       `;
       break;
     }
