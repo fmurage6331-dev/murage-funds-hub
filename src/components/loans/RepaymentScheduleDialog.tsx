@@ -381,9 +381,12 @@ export function RepaymentScheduleDialog({
   const statusIndicator = (repayment: Repayment): ReactNode => {
     if (repayment.payment_status === "pending_confirmation") {
       return (
-        <Badge className="gap-1 bg-blue-600 text-[11px] text-white hover:bg-blue-600">
-          <RefreshCw className="h-3 w-3" /> Payment Pending Review
-        </Badge>
+        <div className="space-y-1">
+          <Badge className="gap-1 bg-blue-600 text-[11px] text-white hover:bg-blue-600">
+            <RefreshCw className="h-3 w-3" /> Payment Pending Review
+          </Badge>
+          <p className="text-[11px] text-blue-700">Awaiting treasurer confirmation</p>
+        </div>
       );
     }
 
