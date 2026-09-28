@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 // Supabase Edge Function: send-email
 // Triggered on:
 // 1. Loan status changes (submitted -> forwarded -> approved / rejected)
@@ -16,8 +15,14 @@ interface EmailNotificationPayload {
   to: string | string[];
   subject: string;
   template:
-    "loan_status_changed" | "contribution_reviewed" | "meeting_scheduled" | "password_reset";
-  data: Record<string, any>;
+    | "loan_status_changed"
+    | "contribution_reviewed"
+    | "meeting_scheduled"
+    | "loan_payment_submitted"
+    | "loan_payment_confirmed"
+    | "loan_payment_rejected"
+    | "password_reset";
+  data: Record<string, unknown>;
 }
 
 // Member-supplied values (names) and generated links are escaped before hitting the HTML body.
@@ -30,7 +35,13 @@ function escapeHtml(value: unknown): string {
     .replace(/'/g, "&#39;");
 }
 
-function generateHtmlEmail(template: string, data: Record<string, any>): string {
+function textValue(value: unknown, fallback = ""): string {
+  if (typeof value === "string") return value;
+  if (value === null || value === undefined) return fallback;
+  return String(value);
+}
+
+function generateHtmlEmail(template: string, data: Record<string, unknown>): string {
   const brandColor = "#0f392b"; // deep primary green
   const accentColor = "#c59a3f"; // gold
   const baseStyles = `
@@ -79,7 +90,7 @@ function generateHtmlEmail(template: string, data: Record<string, any>): string 
         <div style="background-color: #f9fafb; border-left: 4px solid ${statusColor}; padding: 16px; margin: 20px 0; border-radius: 4px;">
           <p style="margin: 0 0 8px 0;"><strong>Amount:</strong> KES ${Number(amount || 0).toLocaleString()}</p>
           <p style="margin: 0 0 8px 0;"><strong>Status:</strong> <span style="color: ${statusColor}; font-weight: bold; text-transform: uppercase;">${status}</span></p>
-          <p style="margin: 0 0 8px 0;"><strong>Method:</strong> ${(method || "M-Pesa").toUpperCase()}</p>
+          <p style="margin: 0 0 8px 0;"><strong>Method:</strong> ${textValue(method, "M-Pesa").toUpperCase()}</p>
           ${reference ? `<p style="margin: 0 0 8px 0;"><strong>Reference:</strong> ${reference}</p>` : ""}
           ${notes ? `<p style="margin: 0; color: #6b7280;"><strong>Treasury Note:</strong> ${notes}</p>` : ""}
         </div>
@@ -88,9 +99,87 @@ function generateHtmlEmail(template: string, data: Record<string, any>): string 
       break;
     }
 
+    case "loan_payment_submitted": {
+      const {
+        memberName,
+        amount,
+        paymentMethod,
+        reference,
+        installmentNumber,
+        submittedAt,
+        adminPhone,
+      } = data;
+      contentHtml = `
+        <h2 style="color: ${brandColor}; margin-top: 0;">Loan Payment Awaiting Confirmation</h2>
+        <p>A member has submitted a loan repayment for treasury review:</p>
+        <div style="background-color: #f9fafb; border-left: 4px solid ${accentColor}; padding: 16px; margin: 20px 0; border-radius: 4px;">
+          <p style="margin: 0 0 8px 0;"><strong>Member:</strong> ${memberName || "Member"}</p>
+          <p style="margin: 0 0 8px 0;"><strong>Amount:</strong> KES ${Number(amount || 0).toLocaleString()}</p>
+          <p style="margin: 0 0 8px 0;"><strong>Installment:</strong> #${installmentNumber || "—"}</p>
+          <p style="margin: 0 0 8px 0;"><strong>Payment method:</strong> ${paymentMethod || "—"}</p>
+          <p style="margin: 0 0 8px 0;"><strong>Reference:</strong> ${reference || "—"}</p>
+          <p style="margin: 0;"><strong>Submitted:</strong> ${submittedAt || "—"}</p>
+        </div>
+        <p>Review and confirm the payment in the Loans Review queue. SMS/WhatsApp contact: ${adminPhone || "254182528510"}.</p>
+      `;
+      break;
+    }
+
+    case "loan_payment_confirmed": {
+      const {
+        memberName,
+        amount,
+        paymentMethod,
+        reference,
+        installmentNumber,
+        outstandingBalance,
+        confirmedAt,
+      } = data;
+      contentHtml = `
+        <h2 style="color: ${brandColor}; margin-top: 0;">Loan Payment Confirmed</h2>
+        <p>Dear ${memberName || "Member"},</p>
+        <p>Your repayment has been confirmed by the Murage Foundation treasury:</p>
+        <div style="background-color: #f9fafb; border-left: 4px solid #16a34a; padding: 16px; margin: 20px 0; border-radius: 4px;">
+          <p style="margin: 0 0 8px 0;"><strong>Amount confirmed:</strong> KES ${Number(amount || 0).toLocaleString()}</p>
+          <p style="margin: 0 0 8px 0;"><strong>Payment method:</strong> ${paymentMethod || "—"}</p>
+          <p style="margin: 0 0 8px 0;"><strong>Installment:</strong> #${installmentNumber || "—"}</p>
+          <p style="margin: 0 0 8px 0;"><strong>Payment reference:</strong> ${reference || "—"}</p>
+          <p style="margin: 0;"><strong>New outstanding balance:</strong> KES ${Number(outstandingBalance || 0).toLocaleString()}</p>
+        </div>
+        <p>Confirmed at ${confirmedAt || "—"}. You can view your updated repayment schedule in My Loans.</p>
+      `;
+      break;
+    }
+
+    case "loan_payment_rejected": {
+      const {
+        memberName,
+        amount,
+        paymentMethod,
+        reference,
+        installmentNumber,
+        reason,
+        adminPhone,
+      } = data;
+      contentHtml = `
+        <h2 style="color: ${brandColor}; margin-top: 0;">Loan Payment Needs Attention</h2>
+        <p>Dear ${memberName || "Member"},</p>
+        <p>Your submitted loan repayment could not be confirmed:</p>
+        <div style="background-color: #f9fafb; border-left: 4px solid #dc2626; padding: 16px; margin: 20px 0; border-radius: 4px;">
+          <p style="margin: 0 0 8px 0;"><strong>Amount submitted:</strong> KES ${Number(amount || 0).toLocaleString()}</p>
+          <p style="margin: 0 0 8px 0;"><strong>Payment method:</strong> ${paymentMethod || "—"}</p>
+          <p style="margin: 0 0 8px 0;"><strong>Installment:</strong> #${installmentNumber || "—"}</p>
+          <p style="margin: 0 0 8px 0;"><strong>Reference:</strong> ${reference || "—"}</p>
+          <p style="margin: 0;"><strong>Reason:</strong> ${reason || "Please contact the treasurer."}</p>
+        </div>
+        <p>Check the reference and resubmit the payment from My Loans. Need help? Contact ${adminPhone || "254182528510"}.</p>
+      `;
+      break;
+    }
+
     case "meeting_scheduled": {
       const { title, scheduledFor, location, agenda } = data;
-      const formattedDate = new Date(scheduledFor).toLocaleString("en-KE", {
+      const formattedDate = new Date(textValue(scheduledFor)).toLocaleString("en-KE", {
         dateStyle: "full",
         timeStyle: "short",
       });
@@ -103,7 +192,7 @@ function generateHtmlEmail(template: string, data: Record<string, any>): string 
           <h3 style="margin: 0 0 10px 0; color: ${brandColor};">${title}</h3>
           <p style="margin: 0 0 8px 0;"><strong>Date & Time:</strong> ${formattedDate}</p>
           <p style="margin: 0 0 8px 0;"><strong>Location / Venue:</strong> ${location || "TBA / Virtual"}</p>
-          ${agenda ? `<p style="margin: 0; color: #374151;"><strong>Agenda:</strong><br/>${agenda.replace(/\n/g, "<br/>")}</p>` : ""}
+          ${agenda ? `<p style="margin: 0; color: #374151;"><strong>Agenda:</strong><br/>${textValue(agenda).replace(/\n/g, "<br/>")}</p>` : ""}
         </div>
         <p>Your attendance and prompt participation are highly appreciated.</p>
       `;
@@ -185,7 +274,7 @@ serve(async (req) => {
 
     // In production with Resend API key:
     const resendApiKey = Deno.env.get("RESEND_API_KEY");
-    let providerResult = null;
+    let providerResult: unknown = null;
 
     if (resendApiKey) {
       const res = await fetch("https://api.resend.com/emails", {
@@ -215,9 +304,10 @@ serve(async (req) => {
       JSON.stringify({ success: true, message: "Notification processed", result: providerResult }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
-  } catch (error: any) {
-    console.error("[send-email error]", error);
-    return new Response(JSON.stringify({ error: error.message }), {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    console.error("[send-email error]", message);
+    return new Response(JSON.stringify({ error: message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

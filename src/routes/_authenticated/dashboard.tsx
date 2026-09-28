@@ -1,14 +1,21 @@
 import { PaymentInfoCard } from "@/components/shared/PaymentInfoCard";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { Tables } from "@/integrations/supabase/types";
 import { useRoles } from "@/hooks/use-roles";
+import { RepaymentScheduleDialog } from "@/components/loans/RepaymentScheduleDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   ArrowDownRight,
   ArrowUpRight,
+  CalendarDays,
+  CheckCircle2,
+  CreditCard,
+  Clock,
   Users,
   Wallet,
   AlertTriangle,
@@ -41,11 +48,95 @@ const fmt = (n: number) =>
     maximumFractionDigits: 0,
   }).format(n);
 
+const fmtAmount = (n: number) =>
+  new Intl.NumberFormat("en-KE", {
+    style: "currency",
+    currency: "KES",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(n);
+
+type DashboardLoan = Tables<"loans"> & {
+  loan_repayments: Tables<"loan_repayments">[];
+};
+
+function isRepaymentConfirmed(repayment: Tables<"loan_repayments">): boolean {
+  return repayment.payment_status === "confirmed" || repayment.status === "paid";
+}
+
+function canLogRepayment(repayment: Tables<"loan_repayments">): boolean {
+  return (
+    (repayment.status === "pending" || repayment.status === "overdue") &&
+    (repayment.payment_status === "not_paid" || repayment.payment_status === "rejected")
+  );
+}
+
 function Dashboard() {
   const { user } = Route.useRouteContext();
   const r = useRoles(user.id);
+  const queryClient = useQueryClient();
   // Members get their own numbers only; officers see the foundation view.
   const isOfficer = r.isOfficer;
+  const canReviewLoanPayments = r.isAdmin || r.isTreasurer;
+
+  const { data: pendingLoanPayments = 0 } = useQuery({
+    queryKey: ["pending-loan-payments-count"],
+    enabled: canReviewLoanPayments,
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("loan_repayments")
+        .select("id", { count: "exact", head: true })
+        .eq("payment_status", "pending_confirmation");
+      if (error) throw error;
+      return count ?? 0;
+    },
+  });
+
+  useEffect(() => {
+    if (!canReviewLoanPayments) return;
+
+    const channel = supabase
+      .channel("dashboard-loan-payments-realtime")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "loan_repayments",
+        },
+        () => {
+          void queryClient.invalidateQueries({ queryKey: ["pending-loan-payments-count"] });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [canReviewLoanPayments, queryClient]);
+
+  useEffect(() => {
+    if (isOfficer) return;
+
+    const channel = supabase
+      .channel(`dashboard-member-loan-payments-${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "loan_repayments",
+        },
+        () => {
+          void queryClient.invalidateQueries({ queryKey: ["my-loans", user.id] });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [isOfficer, queryClient, user.id]);
 
   const { data: txs = [] } = useQuery({
     queryKey: ["transactions", "all"],
@@ -104,7 +195,7 @@ function Dashboard() {
     },
   });
 
-  const { data: myLoans = [] } = useQuery({
+  const { data: myLoans = [] } = useQuery<DashboardLoan[]>({
     queryKey: ["my-loans", user.id],
     enabled: !isOfficer,
     queryFn: async () => {
@@ -115,7 +206,7 @@ function Dashboard() {
           .eq("member_id", user.id)
           .order("created_at", { ascending: false });
         if (error) throw error;
-        return data ?? [];
+        return (data ?? []) as unknown as DashboardLoan[];
       } catch (error) {
         console.error("Failed to load your loans", error);
         return [];
@@ -185,6 +276,17 @@ function Dashboard() {
     },
     { label: "Donors", value: donorCount.toString(), icon: Users, tone: "text-primary" },
   ];
+  const dashboardStats = canReviewLoanPayments
+    ? [
+        ...stats,
+        {
+          label: "Pending Loan Payments",
+          value: pendingLoanPayments.toString(),
+          icon: Clock,
+          tone: "text-amber-600",
+        },
+      ]
+    : stats;
 
   const recent = txs.slice(0, 6);
 
@@ -205,7 +307,9 @@ function Dashboard() {
     const outstanding = activeLoans.reduce((sum, loan) => {
       const repayments = loan.loan_repayments ?? [];
       const due = repayments.reduce((s, x) => s + Number(x.amount_due), 0);
-      const paid = repayments.reduce((s, x) => s + Number(x.amount_paid), 0);
+      const paid = repayments
+        .filter((repayment) => isRepaymentConfirmed(repayment))
+        .reduce((s, x) => s + Number(x.amount_paid), 0);
       return sum + Math.max(0, due - paid);
     }, 0);
 
@@ -235,6 +339,14 @@ function Dashboard() {
         tone: outstanding > 0 ? "text-destructive" : "text-primary",
       },
     ];
+    const upcomingPayments = activeLoans
+      .flatMap((loan) =>
+        (loan.loan_repayments ?? [])
+          .filter((repayment) => !isRepaymentConfirmed(repayment))
+          .map((repayment) => ({ loan, repayment })),
+      )
+      .sort((a, b) => a.repayment.due_date.localeCompare(b.repayment.due_date))
+      .slice(0, 2);
 
     return (
       <div className="mx-auto max-w-6xl space-y-6">
@@ -254,6 +366,87 @@ function Dashboard() {
             </Card>
           ))}
         </div>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="font-serif">My Upcoming Payments</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Your next two scheduled installments.
+              </p>
+            </div>
+            <Button asChild variant="link" className="px-0">
+              <Link to="/my-loans">View full schedule</Link>
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {upcomingPayments.length === 0 ? (
+              <div className="flex items-center gap-2 py-3 text-sm text-muted-foreground">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600" /> No upcoming loan payments.
+              </div>
+            ) : (
+              <div className="divide-y">
+                {upcomingPayments.map(({ loan, repayment }) => {
+                  const pendingConfirmation = repayment.payment_status === "pending_confirmation";
+                  const canLog = canLogRepayment(repayment);
+                  return (
+                    <div
+                      key={repayment.id}
+                      className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+                    >
+                      <div className="flex items-start gap-3">
+                        {pendingConfirmation ? (
+                          <Clock className="mt-0.5 h-4 w-4 text-blue-600" />
+                        ) : (
+                          <CalendarDays className="mt-0.5 h-4 w-4 text-primary" />
+                        )}
+                        <div>
+                          <div className="font-medium">
+                            Installment #{repayment.installment_number} ·{" "}
+                            {fmtAmount(Number(repayment.amount_due))}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            Due {new Date(repayment.due_date).toLocaleDateString("en-KE")} ·{" "}
+                            {loan.loan_type} loan
+                          </div>
+                          {pendingConfirmation && (
+                            <div className="text-xs text-blue-700">
+                              Awaiting treasurer confirmation
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      {canLog ? (
+                        <RepaymentScheduleDialog
+                          loan={loan}
+                          canSubmitPayment
+                          defaultInstallmentId={repayment.id}
+                          openPaymentFormOnOpen
+                          memberEmail={user.email ?? undefined}
+                          triggerButton={
+                            <Button
+                              size="sm"
+                              className="gap-1 bg-amber-500 text-white hover:bg-amber-600"
+                            >
+                              <CreditCard className="h-3.5 w-3.5" />
+                              {repayment.payment_status === "rejected"
+                                ? "Re-submit Payment"
+                                : "Log Payment"}
+                            </Button>
+                          }
+                        />
+                      ) : (
+                        <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">
+                          Awaiting Confirmation
+                        </Badge>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader>
@@ -281,20 +474,38 @@ function Dashboard() {
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <PaymentInfoCard />
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {stats.map((s) => (
-          <Card key={s.label}>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div className="text-xs uppercase tracking-wider text-muted-foreground">
-                  {s.label}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+        {dashboardStats.map((stat) => {
+          const card = (
+            <Card
+              className={
+                stat.label === "Pending Loan Payments"
+                  ? "border-amber-300 bg-amber-50/40 transition-colors hover:border-amber-400"
+                  : undefined
+              }
+            >
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs uppercase tracking-wider text-muted-foreground">
+                    {stat.label}
+                  </div>
+                  <stat.icon className={`h-4 w-4 ${stat.tone}`} />
                 </div>
-                <s.icon className={`h-4 w-4 ${s.tone}`} />
-              </div>
-              <div className={`mt-2 font-serif text-2xl font-semibold ${s.tone}`}>{s.value}</div>
-            </CardContent>
-          </Card>
-        ))}
+                <div className={`mt-2 font-serif text-2xl font-semibold ${stat.tone}`}>
+                  {stat.value}
+                </div>
+              </CardContent>
+            </Card>
+          );
+
+          return stat.label === "Pending Loan Payments" ? (
+            <Link key={stat.label} to="/loans-review" className="block">
+              {card}
+            </Link>
+          ) : (
+            <div key={stat.label}>{card}</div>
+          );
+        })}
       </div>
 
       {/* Priority 5: Defaulter / Risk Flagging Alert Section */}

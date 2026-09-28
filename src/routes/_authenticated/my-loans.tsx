@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { Tables } from "@/integrations/supabase/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,7 +22,17 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import {
+  AlertTriangle,
+  CalendarDays,
+  CheckCircle2,
+  Clock,
+  CreditCard,
+  Eye,
+  Plus,
+} from "lucide-react";
 import {
   Table,
   TableBody,
@@ -30,8 +41,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { RepaymentScheduleDialog } from "@/components/loans/RepaymentScheduleDialog";
 
@@ -46,48 +55,99 @@ const fmt = (n: number) =>
     maximumFractionDigits: 0,
   }).format(n);
 
-const statusColor = (s: string) =>
-  s === "approved"
+const fmtAmount = (n: number) =>
+  new Intl.NumberFormat("en-KE", {
+    style: "currency",
+    currency: "KES",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(n);
+
+type MyLoan = Tables<"loans"> & {
+  loan_repayments: Tables<"loan_repayments">[];
+};
+
+type Repayment = Tables<"loan_repayments">;
+
+const statusColor = (status: string) =>
+  status === "approved"
     ? "bg-success text-success-foreground"
-    : s === "rejected"
-      ? "bg-destructive/10 text-destructive"
-      : s === "forwarded"
-        ? "bg-primary/10 text-primary"
-        : "bg-gold/20 text-gold";
+    : status === "completed"
+      ? "bg-emerald-600 text-white hover:bg-emerald-600"
+      : status === "rejected"
+        ? "bg-destructive/10 text-destructive"
+        : status === "forwarded"
+          ? "bg-primary/10 text-primary"
+          : "bg-gold/20 text-gold";
+
+function isConfirmed(repayment: Repayment): boolean {
+  return repayment.payment_status === "confirmed" || repayment.status === "paid";
+}
+
+function canLogPayment(repayment: Repayment): boolean {
+  return (
+    (repayment.status === "pending" || repayment.status === "overdue") &&
+    (repayment.payment_status === "not_paid" || repayment.payment_status === "rejected")
+  );
+}
 
 function Page() {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   const { user } = Route.useRouteContext();
 
-  const { data: loans = [], isLoading } = useQuery({
+  const { data: loans = [], isLoading } = useQuery<MyLoan[]>({
     queryKey: ["my-loans", user.id],
-    queryFn: async () =>
-      (
-        await supabase
-          .from("loans")
-          .select("*")
-          .eq("member_id", user.id)
-          .order("created_at", { ascending: false })
-      ).data ?? [],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("loans")
+        .select("*, loan_repayments(*)")
+        .eq("member_id", user.id)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as unknown as MyLoan[];
+    },
   });
+
+  useEffect(() => {
+    const channel = supabase
+      .channel(`my-loan-repayments-${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "loan_repayments",
+        },
+        () => {
+          void queryClient.invalidateQueries({ queryKey: ["my-loans", user.id] });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [queryClient, user.id]);
 
   const { data: rulesByType } = useQuery({
     queryKey: ["loan-rules"],
     queryFn: async () => {
-      const { data } = await supabase.from("loan_rules").select("*").eq("active", true);
-      return Object.fromEntries((data ?? []).map((r) => [r.loan_type, r]));
+      const { data, error } = await supabase.from("loan_rules").select("*").eq("active", true);
+      if (error) throw error;
+      return Object.fromEntries((data ?? []).map((rule) => [rule.loan_type, rule]));
     },
   });
 
   const { data: confirmed = 0 } = useQuery({
     queryKey: ["confirmed-total", user.id],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("contributions")
         .select("amount")
         .eq("member_id", user.id)
         .eq("status", "confirmed");
-      return (data ?? []).reduce((s, r) => s + Number(r.amount), 0);
+      if (error) throw error;
+      return (data ?? []).reduce((sum, row) => sum + Number(row.amount), 0);
     },
   });
 
@@ -104,34 +164,53 @@ function Page() {
     repayment_months: "6",
   });
   const activeRules = rulesByType?.[form.loan_type];
+  const activeLoans = useMemo(() => loans.filter((loan) => loan.status === "approved"), [loans]);
 
   const create = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from("loans").insert({
-        member_id: user.id,
-        loan_type: form.loan_type,
-        amount: Number(form.amount),
-        purpose: form.purpose,
-        repayment_months: Number(form.repayment_months),
-      });
-      if (error) throw error;
+      try {
+        const amount = Number(form.amount);
+        const months = Number(form.repayment_months);
+        if (!Number.isFinite(amount) || amount <= 0)
+          throw new Error("Amount must be greater than zero.");
+        if (!Number.isInteger(months) || months <= 0) {
+          throw new Error("Repayment period must be a positive whole number.");
+        }
+        if (activeRules && months > Number(activeRules.max_repayment_months)) {
+          throw new Error(
+            `${form.loan_type === "project" ? "Project" : "Emergency"} loans can run for at most ${activeRules.max_repayment_months} months.`,
+          );
+        }
+        if (!form.purpose.trim()) throw new Error("Purpose is required.");
+
+        const { error } = await supabase.from("loans").insert({
+          member_id: user.id,
+          loan_type: form.loan_type,
+          amount,
+          purpose: form.purpose.trim(),
+          repayment_months: months,
+        });
+        if (error) throw error;
+      } catch (error) {
+        throw error instanceof Error ? error : new Error("Could not submit the loan request.");
+      }
     },
     onSuccess: () => {
       toast.success("Loan request submitted");
       setOpen(false);
       setForm({ loan_type: "project", amount: "", purpose: "", repayment_months: "6" });
-      qc.invalidateQueries({ queryKey: ["my-loans"] });
+      void queryClient.invalidateQueries({ queryKey: ["my-loans"] });
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (error: Error) => toast.error(error.message),
   });
 
   return (
-    <div className="mx-auto max-w-5xl space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="mx-auto max-w-6xl space-y-5">
+      <div className="flex items-center justify-between gap-4">
         <div>
           <h2 className="font-serif text-2xl font-semibold text-primary">My Loans</h2>
           <p className="text-sm text-muted-foreground">
-            Request a loan against your contributions.
+            Request a loan against your contributions and keep your repayments up to date.
           </p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
@@ -145,8 +224,8 @@ function Page() {
               <DialogTitle className="font-serif">Request a loan</DialogTitle>
             </DialogHeader>
             <form
-              onSubmit={(e) => {
-                e.preventDefault();
+              onSubmit={(event) => {
+                event.preventDefault();
                 create.mutate();
               }}
               className="space-y-3"
@@ -155,7 +234,16 @@ function Page() {
                 <Label>Loan type</Label>
                 <Select
                   value={form.loan_type}
-                  onValueChange={(v: "project" | "emergency") => setForm({ ...form, loan_type: v })}
+                  onValueChange={(value: "project" | "emergency") =>
+                    setForm({
+                      ...form,
+                      loan_type: value,
+                      repayment_months:
+                        value === "emergency" && Number(form.repayment_months) > 6
+                          ? "6"
+                          : form.repayment_months,
+                    })
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -184,7 +272,7 @@ function Page() {
                   step="1"
                   required
                   value={form.amount}
-                  onChange={(e) => setForm({ ...form, amount: e.target.value })}
+                  onChange={(event) => setForm({ ...form, amount: event.target.value })}
                 />
               </div>
               <div>
@@ -192,9 +280,10 @@ function Page() {
                 <Input
                   type="number"
                   min="1"
+                  max={activeRules?.max_repayment_months}
                   required
                   value={form.repayment_months}
-                  onChange={(e) => setForm({ ...form, repayment_months: e.target.value })}
+                  onChange={(event) => setForm({ ...form, repayment_months: event.target.value })}
                 />
               </div>
               <div>
@@ -203,7 +292,7 @@ function Page() {
                   rows={3}
                   required
                   value={form.purpose}
-                  onChange={(e) => setForm({ ...form, purpose: e.target.value })}
+                  onChange={(event) => setForm({ ...form, purpose: event.target.value })}
                 />
               </div>
               <DialogFooter>
@@ -216,6 +305,194 @@ function Page() {
         </Dialog>
       </div>
 
+      {activeLoans.length > 0 && (
+        <section className="space-y-3" aria-labelledby="active-loans-heading">
+          <div>
+            <h3 id="active-loans-heading" className="font-serif text-xl font-semibold text-primary">
+              Active loan payment overview
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              Confirmed payments update your outstanding balance. Member-submitted payments remain
+              pending until reviewed.
+            </p>
+          </div>
+          <div className="grid gap-4 lg:grid-cols-2">
+            {activeLoans.map((loan) => {
+              const repayments = loan.loan_repayments ?? [];
+              const totalPaid = repayments
+                .filter(isConfirmed)
+                .reduce((sum, repayment) => sum + Number(repayment.amount_paid || 0), 0);
+              const scheduledTotal = repayments.reduce(
+                (sum, repayment) => sum + Number(repayment.amount_due),
+                0,
+              );
+              const totalDue = repayments.length > 0 ? scheduledTotal : null;
+              const outstanding = totalDue === null ? null : Math.max(0, totalDue - totalPaid);
+              const progress =
+                totalDue === null
+                  ? null
+                  : Math.min(100, Math.round((totalPaid / Math.max(1, totalDue)) * 100));
+              const overdue = repayments.some(
+                (repayment) => repayment.status === "overdue" && !isConfirmed(repayment),
+              );
+              const next = repayments.find((repayment) => !isConfirmed(repayment));
+              const paymentIsPending = next?.payment_status === "pending_confirmation";
+              const paymentCanBeLogged = next ? canLogPayment(next) : false;
+              const progressColor =
+                progress === null
+                  ? "bg-muted-foreground/40"
+                  : overdue
+                    ? "bg-rose-500"
+                    : progress < 40
+                      ? "bg-amber-500"
+                      : "bg-emerald-500";
+              const interestRate = rulesByType?.[loan.loan_type]?.interest_rate_percent;
+              const monthlyAmount =
+                repayments.length > 0
+                  ? repayments.reduce((sum, repayment) => sum + Number(repayment.amount_due), 0) /
+                    repayments.length
+                  : null;
+
+              return (
+                <Card key={loan.id} className={overdue ? "border-rose-200" : undefined}>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <CardTitle className="font-serif capitalize">
+                          {loan.loan_type} loan
+                        </CardTitle>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Approved{" "}
+                          {new Date(loan.decision_at ?? loan.created_at).toLocaleDateString(
+                            "en-KE",
+                          )}
+                        </p>
+                      </div>
+                      <Badge className={statusColor(loan.status)}>{loan.status}</Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
+                      <div>
+                        <div className="text-xs text-muted-foreground">Amount borrowed</div>
+                        <div className="font-semibold">{fmt(Number(loan.amount))}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-muted-foreground">Total paid</div>
+                        <div className="font-semibold text-emerald-600">{fmtAmount(totalPaid)}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-muted-foreground">Outstanding</div>
+                        <div className="font-semibold text-rose-600">
+                          {outstanding === null ? "—" : fmtAmount(outstanding)}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-muted-foreground">Interest rate</div>
+                        <div className="font-semibold">{interestRate ?? "—"}%</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-muted-foreground">Monthly payment</div>
+                        <div className="font-semibold">
+                          {monthlyAmount === null ? "—" : fmtAmount(monthlyAmount)}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>Payment progress</span>
+                        <span className="font-medium text-foreground">
+                          {progress === null ? "Schedule pending" : `${progress}%`}
+                        </span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className={`h-full rounded-full transition-all ${progressColor}`}
+                          style={{ width: `${progress ?? 0}%` }}
+                        />
+                      </div>
+                      <div
+                        className={`text-xs ${overdue ? "text-rose-700" : "text-muted-foreground"}`}
+                      >
+                        {progress === null
+                          ? "Repayment schedule pending"
+                          : overdue
+                            ? "Overdue payment requires attention"
+                            : "On track"}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted/30 p-3">
+                      <div className="flex items-start gap-2">
+                        {next ? (
+                          overdue ? (
+                            <AlertTriangle className="mt-0.5 h-4 w-4 text-rose-600" />
+                          ) : paymentIsPending ? (
+                            <Clock className="mt-0.5 h-4 w-4 text-blue-600" />
+                          ) : (
+                            <CalendarDays className="mt-0.5 h-4 w-4 text-primary" />
+                          )
+                        ) : (
+                          <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-600" />
+                        )}
+                        <div>
+                          <div className="text-xs font-medium">Next payment due</div>
+                          <div className="text-sm font-semibold">
+                            {next
+                              ? `${new Date(next.due_date).toLocaleDateString("en-KE")} · ${fmtAmount(Number(next.amount_due))}`
+                              : "All installments paid"}
+                          </div>
+                          {paymentIsPending && (
+                            <div className="text-xs text-blue-700">Awaiting Confirmation</div>
+                          )}
+                        </div>
+                      </div>
+                      {paymentCanBeLogged && next && (
+                        <RepaymentScheduleDialog
+                          loan={loan}
+                          canSubmitPayment
+                          defaultInstallmentId={next.id}
+                          openPaymentFormOnOpen
+                          memberEmail={user.email ?? undefined}
+                          triggerButton={
+                            <Button
+                              size="sm"
+                              className="gap-1 bg-amber-500 text-white hover:bg-amber-600"
+                            >
+                              <CreditCard className="h-3.5 w-3.5" />
+                              {next.payment_status === "rejected"
+                                ? "Re-submit Payment"
+                                : "Log Payment"}
+                            </Button>
+                          }
+                        />
+                      )}
+                      {paymentIsPending && (
+                        <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">
+                          Awaiting Confirmation
+                        </Badge>
+                      )}
+                    </div>
+
+                    <RepaymentScheduleDialog
+                      loan={loan}
+                      canSubmitPayment
+                      memberEmail={user.email ?? undefined}
+                      triggerButton={
+                        <Button variant="outline" size="sm" className="w-full gap-2">
+                          <Eye className="h-3.5 w-3.5" /> View Full Schedule
+                        </Button>
+                      }
+                    />
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       <Card>
         <Table>
           <TableHeader>
@@ -227,7 +504,7 @@ function Page() {
               <TableHead>Eligibility</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Amount</TableHead>
-              <TableHead className="w-28 text-center">Schedule</TableHead>
+              <TableHead className="w-36 text-center">Schedule</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -244,30 +521,41 @@ function Page() {
                 </TableCell>
               </TableRow>
             ) : (
-              loans.map((l) => (
-                <TableRow key={l.id}>
-                  <TableCell>{new Date(l.created_at).toLocaleDateString()}</TableCell>
+              loans.map((loan) => (
+                <TableRow key={loan.id}>
+                  <TableCell>{new Date(loan.created_at).toLocaleDateString()}</TableCell>
                   <TableCell>
                     <Badge variant="outline" className="capitalize">
-                      {l.loan_type}
+                      {loan.loan_type}
                     </Badge>
                   </TableCell>
-                  <TableCell className="max-w-xs truncate">{l.purpose}</TableCell>
-                  <TableCell>{l.repayment_months} mo</TableCell>
+                  <TableCell className="max-w-xs truncate">{loan.purpose}</TableCell>
+                  <TableCell>{loan.repayment_months} mo</TableCell>
                   <TableCell className="max-w-xs text-xs text-muted-foreground">
-                    {l.auto_eligible ? (
+                    {loan.auto_eligible ? (
                       <span className="text-success">Meets criteria</span>
                     ) : (
-                      <span title={l.eligibility_note ?? ""}>Needs board review</span>
+                      <span title={loan.eligibility_note ?? ""}>Needs board review</span>
                     )}
                   </TableCell>
                   <TableCell>
-                    <Badge className={statusColor(l.status)}>{l.status}</Badge>
+                    <Badge className={statusColor(loan.status)}>{loan.status}</Badge>
                   </TableCell>
-                  <TableCell className="text-right font-medium">{fmt(Number(l.amount))}</TableCell>
+                  <TableCell className="text-right font-medium">
+                    {fmt(Number(loan.amount))}
+                  </TableCell>
                   <TableCell className="text-center">
-                    {l.status === "approved" ? (
-                      <RepaymentScheduleDialog loan={l} canRecordPayment={false} />
+                    {loan.status === "approved" || loan.status === "completed" ? (
+                      <RepaymentScheduleDialog
+                        loan={loan}
+                        canSubmitPayment={loan.status === "approved"}
+                        memberEmail={user.email ?? undefined}
+                        triggerButton={
+                          <Button variant="outline" size="sm" className="h-8 gap-1 text-xs">
+                            <CalendarDays className="h-3.5 w-3.5" /> View Schedule
+                          </Button>
+                        }
+                      />
                     ) : (
                       <span className="text-xs text-muted-foreground">—</span>
                     )}
