@@ -31,13 +31,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Check, X, PlusCircle, Search, Upload } from "lucide-react";
+import { Check, X, PlusCircle, Search, Upload, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { UnauthorizedCard } from "@/components/shared/UnauthorizedCard";
 import { useRoles } from "@/hooks/use-roles";
 import { attachMemberProfiles, embeddedProfile } from "@/lib/member-profiles";
 import { notifyContributionReview } from "@/lib/notifications";
 import { ContributionImportPanel } from "@/components/contributions/ContributionImportPanel";
+import { ContributionExportButtons } from "@/components/contributions/ContributionExportButtons";
+import { capitalise } from "@/lib/export-documents";
 import { useEffect, useMemo, useState } from "react";
 
 export const Route = createFileRoute("/_authenticated/contributions-review")({
@@ -225,6 +227,9 @@ function Page() {
     [contributions, statusTab],
   );
 
+  /** Describes the active status tab on the exported documents. */
+  const exportScopeLabel = statusTab === "all" ? "All statuses" : `${capitalise(statusTab)} only`;
+
   const logOnBehalfMutation = useMutation({
     mutationFn: async () => {
       if (!selectedMemberId) throw new Error("Please select a member.");
@@ -336,6 +341,13 @@ function Page() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {canReview && (
+            <ContributionExportButtons
+              rows={visibleRows}
+              scopeLabel={exportScopeLabel}
+              generatedBy={r.isAdmin ? "Admin" : "Treasurer"}
+            />
+          )}
           {r.isAdmin && (
             <Button variant="outline" onClick={() => setImportDialogOpen(true)} className="gap-2">
               <Upload className="h-4 w-4" />
@@ -433,42 +445,46 @@ function Page() {
                       {fmt(Number(row.amount))}
                     </TableCell>
                     <TableCell>
-                      {row.status === "pending" && canReview && (
-                        <div className="flex gap-1">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            aria-label="Confirm contribution"
-                            disabled={setStatus.isPending}
-                            onClick={() =>
-                              setStatus.mutate({ id: row.id, status: "confirmed", row })
-                            }
-                          >
-                            <Check
-                              className={
-                                busy ? "h-4 w-4 animate-pulse text-success" : "h-4 w-4 text-success"
+                      <div className="flex gap-1">
+                        {row.status === "pending" && canReview && (
+                          <>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              aria-label="Confirm contribution"
+                              disabled={setStatus.isPending}
+                              onClick={() =>
+                                setStatus.mutate({ id: row.id, status: "confirmed", row })
                               }
-                            />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            aria-label="Reject contribution"
-                            disabled={setStatus.isPending}
-                            onClick={() =>
-                              setStatus.mutate({ id: row.id, status: "rejected", row })
-                            }
-                          >
-                            <X
-                              className={
-                                busy
-                                  ? "h-4 w-4 animate-pulse text-destructive"
-                                  : "h-4 w-4 text-destructive"
+                            >
+                              <Check
+                                className={
+                                  busy
+                                    ? "h-4 w-4 animate-pulse text-success"
+                                    : "h-4 w-4 text-success"
+                                }
+                              />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              aria-label="Reject contribution"
+                              disabled={setStatus.isPending}
+                              onClick={() =>
+                                setStatus.mutate({ id: row.id, status: "rejected", row })
                               }
-                            />
-                          </Button>
-                        </div>
-                      )}
+                            >
+                              <X
+                                className={
+                                  busy
+                                    ? "h-4 w-4 animate-pulse text-destructive"
+                                    : "h-4 w-4 text-destructive"
+                                }
+                              />
+                            </Button>
+                          </>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
