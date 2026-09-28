@@ -80,6 +80,8 @@ BEGIN
       OR NEW.reference IS DISTINCT FROM OLD.reference
       OR NEW.recorded_by IS DISTINCT FROM OLD.recorded_by
       OR NEW.notes IS DISTINCT FROM OLD.notes
+      OR NEW.created_at IS DISTINCT FROM OLD.created_at
+      OR NEW.updated_at IS DISTINCT FROM OLD.updated_at
       OR NEW.payment_confirmed_by IS DISTINCT FROM OLD.payment_confirmed_by
       OR NEW.payment_confirmed_at IS DISTINCT FROM OLD.payment_confirmed_at
       OR NEW.payment_rejection_reason IS DISTINCT FROM OLD.payment_rejection_reason
