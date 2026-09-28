@@ -61,7 +61,10 @@ BEGIN
   -- auth.uid() is NULL for trusted service-role jobs. Those jobs retain their
   -- existing ability to administer repayment rows.
   IF auth.uid() IS NOT NULL
-    AND NOT public.has_any_role(auth.uid(), ARRAY['admin', 'treasurer']::public.app_role[])
+    AND NOT public.has_any_role(
+      auth.uid(),
+      ARRAY['admin', 'treasurer', 'chairman']::public.app_role[]
+    )
   THEN
     IF OLD.payment_status NOT IN ('not_paid', 'rejected') THEN
       RAISE EXCEPTION 'This repayment is not available for member submission';

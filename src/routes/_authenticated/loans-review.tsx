@@ -314,9 +314,9 @@ function Page() {
       void queryClient.invalidateQueries({ queryKey: ["loan_repayments"] });
 
       const profile = selectedPayment?.loan?.profiles;
-      if (profile?.email && selectedPayment) {
+      if (profile && selectedPayment) {
         void notifyLoanPaymentConfirmed({
-          memberEmail: profile.email,
+          memberEmail: profile.email ?? "",
           memberId: profile.id,
           memberPhone: profile.phone_number ?? undefined,
           memberName: profile.full_name ?? undefined,
@@ -375,9 +375,9 @@ function Page() {
       void queryClient.invalidateQueries({ queryKey: ["loan_repayments"] });
 
       const profile = selectedPayment?.loan?.profiles;
-      if (profile?.email && selectedPayment) {
+      if (profile && selectedPayment) {
         void notifyLoanPaymentRejected({
-          memberEmail: profile.email,
+          memberEmail: profile.email ?? "",
           memberId: profile.id,
           memberPhone: profile.phone_number ?? undefined,
           memberName: profile.full_name ?? undefined,
