@@ -40,6 +40,7 @@ type LoanPaymentMessage =
       event: "submitted";
       memberName: string;
       amount: number;
+      paymentMethod: string;
       reference: string;
       installmentNumber: number;
       loanId: string;
@@ -50,6 +51,7 @@ type LoanPaymentMessage =
       memberName: string;
       memberPhone?: string;
       amount: number;
+      paymentMethod?: string;
       reference?: string;
       installmentNumber: number;
       outstandingBalance?: number;
@@ -60,6 +62,7 @@ type LoanPaymentMessage =
       memberName: string;
       memberPhone?: string;
       amount: number;
+      paymentMethod?: string;
       reference?: string;
       installmentNumber: number;
       reason: string;
@@ -171,6 +174,7 @@ export async function notifyContributionReview({
 export async function notifyLoanPaymentSubmitted({
   memberName,
   amount,
+  paymentMethod,
   reference,
   installmentNumber,
   loanId,
@@ -178,6 +182,7 @@ export async function notifyLoanPaymentSubmitted({
 }: {
   memberName: string;
   amount: number;
+  paymentMethod: string;
   reference: string;
   installmentNumber: number;
   loanId: string;
@@ -187,23 +192,23 @@ export async function notifyLoanPaymentSubmitted({
     event: "submitted",
     memberName,
     amount,
+    paymentMethod,
     reference,
     installmentNumber,
     loanId,
   });
 
   const officerEmails = await financeOfficerEmails();
-  // Finance officers receive the email when their profiles have email addresses.
-  // The configured phone is included for the existing WhatsApp/SMS integration
-  // and is also a safe fallback for environments without officer email rows.
-  const recipients = officerEmails.length > 0 ? officerEmails : [LOAN_PAYMENT_ADMIN_PHONE];
+  if (officerEmails.length === 0) return;
+
   return sendNotificationEmail({
-    to: recipients,
+    to: officerEmails,
     subject: `Murage Foundation — Loan Payment Awaiting Confirmation (${reference})`,
     template: "loan_payment_submitted",
     data: {
       memberName,
       amount,
+      paymentMethod,
       reference,
       installmentNumber,
       loanId,
@@ -219,6 +224,7 @@ export async function notifyLoanPaymentConfirmed({
   memberPhone,
   memberName,
   amount,
+  paymentMethod,
   reference,
   installmentNumber,
   outstandingBalance,
@@ -229,6 +235,7 @@ export async function notifyLoanPaymentConfirmed({
   memberPhone?: string;
   memberName?: string;
   amount: number;
+  paymentMethod?: string;
   reference?: string;
   installmentNumber: number;
   outstandingBalance?: number;
@@ -240,6 +247,7 @@ export async function notifyLoanPaymentConfirmed({
     memberPhone,
     memberName: memberName ?? "Member",
     amount,
+    paymentMethod,
     reference,
     installmentNumber,
     outstandingBalance,
@@ -252,6 +260,7 @@ export async function notifyLoanPaymentConfirmed({
     data: {
       memberName,
       amount,
+      paymentMethod,
       reference,
       installmentNumber,
       outstandingBalance,
@@ -266,6 +275,7 @@ export async function notifyLoanPaymentRejected({
   memberPhone,
   memberName,
   amount,
+  paymentMethod,
   reference,
   installmentNumber,
   reason,
@@ -276,6 +286,7 @@ export async function notifyLoanPaymentRejected({
   memberPhone?: string;
   memberName?: string;
   amount: number;
+  paymentMethod?: string;
   reference?: string;
   installmentNumber: number;
   reason: string;
@@ -287,6 +298,7 @@ export async function notifyLoanPaymentRejected({
     memberPhone,
     memberName: memberName ?? "Member",
     amount,
+    paymentMethod,
     reference,
     installmentNumber,
     reason,
@@ -299,6 +311,7 @@ export async function notifyLoanPaymentRejected({
     data: {
       memberName,
       amount,
+      paymentMethod,
       reference,
       installmentNumber,
       reason,

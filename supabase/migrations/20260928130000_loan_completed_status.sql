@@ -80,9 +80,9 @@ BEGIN
 END;
 $$;
 
--- Install the trigger only when an auto-completion trigger is not already
--- present. This avoids replacing a hosted trigger that may have been added
--- outside the repository migration history.
+-- Install the trigger only when an equivalent auto-completion trigger is not
+-- already present. Hosted environments may have used a different trigger
+-- name, so also inspect the function body rather than relying on one name.
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -90,10 +90,18 @@ BEGIN
     FROM pg_trigger t
     JOIN pg_class c ON c.oid = t.tgrelid
     JOIN pg_namespace n ON n.oid = c.relnamespace
+    JOIN pg_proc p ON p.oid = t.tgfoid
     WHERE NOT t.tgisinternal
-      AND t.tgname = 'trg_auto_complete_loan_after_repayment'
       AND c.relname = 'loan_repayments'
       AND n.nspname = 'public'
+      AND (
+        p.proname = 'auto_complete_loan_after_repayment'
+        OR (
+          pg_get_functiondef(p.oid) ILIKE '%status%completed%'
+          AND pg_get_functiondef(p.oid) ILIKE '%loan_repayments%'
+          AND pg_get_functiondef(p.oid) ILIKE '%UPDATE%loans%'
+        )
+      )
   ) THEN
     CREATE TRIGGER trg_auto_complete_loan_after_repayment
     AFTER INSERT OR UPDATE OF amount_paid, status, payment_status ON public.loan_repayments

@@ -54,6 +54,14 @@ const fmt = (n: number) =>
     maximumFractionDigits: 0,
   }).format(n);
 
+const fmtAmount = (n: number) =>
+  new Intl.NumberFormat("en-KE", {
+    style: "currency",
+    currency: "KES",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(n);
+
 type Repayment = Tables<"loan_repayments">;
 type PaymentMethod = "mpesa" | "bank_transfer" | "cash";
 
@@ -99,7 +107,7 @@ function canMemberSubmit(repayment: Repayment): boolean {
 }
 
 function methodLabel(method: string | null): string {
-  if (method === "bank_transfer") return "Bank transfer";
+  if (method === "bank_transfer" || method === "bank") return "Bank transfer";
   if (method === "mpesa") return "M-Pesa";
   if (method === "cash") return "Cash";
   return method || "—";
@@ -144,6 +152,11 @@ export function RepaymentScheduleDialog({
   });
 
   const totalLoan = Number(loan.amount);
+  const scheduledTotal = useMemo(
+    () => repayments.reduce((sum, repayment) => sum + Number(repayment.amount_due), 0),
+    [repayments],
+  );
+  const totalDue = repayments.length > 0 ? scheduledTotal : null;
   const totalPaid = useMemo(
     () =>
       repayments
@@ -153,7 +166,7 @@ export function RepaymentScheduleDialog({
         .reduce((sum, repayment) => sum + Number(repayment.amount_paid || 0), 0),
     [repayments],
   );
-  const outstandingBalance = Math.max(0, totalLoan - totalPaid);
+  const outstandingBalance = totalDue === null ? null : Math.max(0, totalDue - totalPaid);
   const nextDue = repayments.find((repayment) => !isSettled(repayment));
   const overdueCount = repayments.filter(
     (repayment) => repayment.status === "overdue" && !isSettled(repayment),
@@ -167,7 +180,6 @@ export function RepaymentScheduleDialog({
     setAmountToPay(String(Number(repayment.amount_due)));
     setPaymentMethod("mpesa");
     setReference("");
-    setPaymentDate(localDateToday());
     setNotes("");
   }, []);
 
@@ -219,6 +231,7 @@ export function RepaymentScheduleDialog({
           amount_due: number;
           due_date: string;
           amount_paid: number;
+          payment_status: "not_paid";
           status: "pending";
         }> = [];
 
@@ -232,6 +245,7 @@ export function RepaymentScheduleDialog({
             amount_due: amountDue,
             due_date: dueDate.toISOString().slice(0, 10),
             amount_paid: 0,
+            payment_status: "not_paid",
             status: "pending",
           });
         }
@@ -258,16 +272,11 @@ export function RepaymentScheduleDialog({
           throw new Error("Select an installment that is ready for payment.");
         }
 
-        const amount = Number(amountToPay);
+        const amount = Number(selectedInstallment.amount_due);
         if (!Number.isFinite(amount) || amount < 1) {
-          throw new Error("Amount paid must be at least KES 1.");
+          throw new Error("This installment does not have a valid amount due.");
         }
-        if (amount > Number(selectedInstallment.amount_due)) {
-          throw new Error("Amount paid cannot exceed the installment amount due.");
-        }
-        if (!reference.trim()) throw new Error("M-Pesa reference is required.");
-        if (!paymentDate) throw new Error("Payment date is required.");
-        if (paymentDate > today) throw new Error("Payment date cannot be in the future.");
+        if (!reference.trim()) throw new Error("Payment reference is required.");
 
         const {
           data: { user },
@@ -297,6 +306,7 @@ export function RepaymentScheduleDialog({
         return {
           amount,
           installmentNumber: selectedInstallment.installment_number,
+          paymentMethod,
           reference: reference.trim(),
           submittedAt,
         };
@@ -319,6 +329,7 @@ export function RepaymentScheduleDialog({
       void notifyLoanPaymentSubmitted({
         memberName: memberName ?? memberEmail ?? "Member",
         amount: payment.amount,
+        paymentMethod: payment.paymentMethod,
         reference: payment.reference,
         installmentNumber: payment.installmentNumber,
         loanId: loan.id,
@@ -346,12 +357,18 @@ export function RepaymentScheduleDialog({
         if (authError) throw authError;
         if (!user) throw new Error("Please sign in again before recording a payment.");
 
-        const status = amount >= Number(selectedInstallment.amount_due) ? "paid" : "partial";
+        const currentPaid = Number(selectedInstallment.amount_paid || 0);
+        const remaining = Math.max(0, Number(selectedInstallment.amount_due) - currentPaid);
+        if (amount > remaining) {
+          throw new Error("Amount received cannot exceed the remaining installment balance.");
+        }
+        const newTotalPaid = currentPaid + amount;
+        const status = newTotalPaid >= Number(selectedInstallment.amount_due) ? "paid" : "partial";
         const confirmedAt = new Date(paymentDate).toISOString();
         const { error } = await supabase
           .from("loan_repayments")
           .update({
-            amount_paid: amount,
+            amount_paid: newTotalPaid,
             paid_at: confirmedAt,
             status,
             payment_status: "confirmed",
@@ -483,16 +500,20 @@ export function RepaymentScheduleDialog({
 
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-7">
           <div className="rounded-lg border bg-card p-3 text-center">
-            <span className="text-xs text-muted-foreground">Total Loan</span>
-            <div className="text-lg font-semibold text-primary">{fmt(totalLoan)}</div>
+            <span className="text-xs text-muted-foreground">Total Scheduled</span>
+            <div className="text-lg font-semibold text-primary">
+              {totalDue === null ? "—" : fmtAmount(totalDue)}
+            </div>
           </div>
           <div className="rounded-lg border bg-card p-3 text-center">
             <span className="text-xs text-muted-foreground">Total Paid</span>
-            <div className="text-lg font-semibold text-emerald-600">{fmt(totalPaid)}</div>
+            <div className="text-lg font-semibold text-emerald-600">{fmtAmount(totalPaid)}</div>
           </div>
           <div className="rounded-lg border bg-card p-3 text-center">
             <span className="text-xs text-muted-foreground">Outstanding</span>
-            <div className="text-lg font-semibold text-rose-600">{fmt(outstandingBalance)}</div>
+            <div className="text-lg font-semibold text-rose-600">
+              {outstandingBalance === null ? "—" : fmtAmount(outstandingBalance)}
+            </div>
           </div>
           <div className="rounded-lg border bg-card p-3 text-center">
             <span className="text-xs text-muted-foreground">Next Due</span>
@@ -541,7 +562,7 @@ export function RepaymentScheduleDialog({
                   {generateSchedule.isPending ? "Generating…" : "Generate Schedule"}
                 </Button>
               )}
-              {repayments.length > 0 && outstandingBalance > 0 && (
+              {repayments.length > 0 && outstandingBalance !== null && outstandingBalance > 0 && (
                 <Button
                   size="sm"
                   variant={showOfficerPaymentForm ? "secondary" : "default"}
@@ -582,7 +603,7 @@ export function RepaymentScheduleDialog({
                     {repayments.map((repayment) => (
                       <SelectItem key={repayment.id} value={repayment.id}>
                         Installment #{repayment.installment_number} (Due: {repayment.due_date} —{" "}
-                        {fmt(Number(repayment.amount_due))})
+                        {fmtAmount(Number(repayment.amount_due))})
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -715,10 +736,10 @@ export function RepaymentScheduleDialog({
                         })}
                       </TableCell>
                       <TableCell className="text-xs font-semibold">
-                        {fmt(Number(repayment.amount_due))}
+                        {fmtAmount(Number(repayment.amount_due))}
                       </TableCell>
                       <TableCell className="text-xs font-semibold text-emerald-600">
-                        {fmt(Number(repayment.amount_paid))}
+                        {fmtAmount(Number(repayment.amount_paid))}
                       </TableCell>
                       <TableCell>{statusIndicator(repayment)}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">
@@ -797,20 +818,27 @@ export function RepaymentScheduleDialog({
               <DialogTitle className="font-serif">Log Loan Payment</DialogTitle>
               <DialogDescription>
                 {selectedInstallment
-                  ? `Installment #${selectedInstallment.installment_number} — ${fmt(Number(selectedInstallment.amount_due))}`
+                  ? `Installment #${selectedInstallment.installment_number} — ${fmtAmount(Number(selectedInstallment.amount_due))}`
                   : "Select an installment to continue."}
               </DialogDescription>
             </DialogHeader>
 
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
-              <div className="mb-2 font-semibold">Pay via M-Pesa Paybill:</div>
-              <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-                <span>Business No:</span>
-                <strong>522522</strong>
-                <span>Account No:</span>
-                <strong>7989164</strong>
+            {paymentMethod === "mpesa" ? (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
+                <div className="mb-2 font-semibold">Pay via M-Pesa Paybill:</div>
+                <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+                  <span>Business No:</span>
+                  <strong>522522</strong>
+                  <span>Account No:</span>
+                  <strong>7989164</strong>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="rounded-lg border bg-muted/40 p-4 text-sm text-muted-foreground">
+                Submit the reference shown on your bank transfer or cash receipt. The treasurer will
+                verify it before confirming the installment.
+              </div>
+            )}
 
             <form
               className="space-y-4"
@@ -820,24 +848,27 @@ export function RepaymentScheduleDialog({
               }}
             >
               <div className="space-y-1.5">
-                <Label htmlFor={`member-payment-amount-${loan.id}`}>Amount Paid *</Label>
+                <Label htmlFor={`member-payment-amount-${loan.id}`}>Installment Amount</Label>
                 <Input
                   id={`member-payment-amount-${loan.id}`}
-                  type="number"
-                  min="1"
-                  max={selectedInstallment ? Number(selectedInstallment.amount_due) : undefined}
-                  step="0.01"
-                  value={amountToPay}
-                  onChange={(event) => setAmountToPay(event.target.value)}
-                  required
+                  type="text"
+                  value={
+                    selectedInstallment ? fmtAmount(Number(selectedInstallment.amount_due)) : "—"
+                  }
+                  readOnly
+                  aria-readonly="true"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Enter the amount you paid via M-Pesa
+                  The treasurer records any amount variance when confirming the payment.
                 </p>
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor={`member-payment-reference-${loan.id}`}>M-Pesa Reference *</Label>
+                <Label htmlFor={`member-payment-reference-${loan.id}`}>
+                  {paymentMethod === "mpesa"
+                    ? "M-Pesa Transaction Reference *"
+                    : "Payment Reference *"}
+                </Label>
                 <Input
                   id={`member-payment-reference-${loan.id}`}
                   placeholder="e.g. QWE123456789"
@@ -845,7 +876,11 @@ export function RepaymentScheduleDialog({
                   onChange={(event) => setReference(event.target.value)}
                   required
                 />
-                <p className="text-xs text-muted-foreground">From your M-Pesa confirmation SMS</p>
+                <p className="text-xs text-muted-foreground">
+                  {paymentMethod === "mpesa"
+                    ? "From your M-Pesa confirmation SMS"
+                    : "Receipt or transfer reference from your payment record"}
+                </p>
               </div>
 
               <div className="space-y-1.5">
@@ -863,18 +898,6 @@ export function RepaymentScheduleDialog({
                     <SelectItem value="cash">Cash</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor={`member-payment-date-${loan.id}`}>Payment Date *</Label>
-                <Input
-                  id={`member-payment-date-${loan.id}`}
-                  type="date"
-                  max={today}
-                  value={paymentDate}
-                  onChange={(event) => setPaymentDate(event.target.value)}
-                  required
-                />
               </div>
 
               <div className="space-y-1.5">

@@ -78,17 +78,27 @@ const fmt = (n: number) =>
     maximumFractionDigits: 0,
   }).format(n);
 
+const fmtAmount = (n: number) =>
+  new Intl.NumberFormat("en-KE", {
+    style: "currency",
+    currency: "KES",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(n);
+
 const statusColor = (status: string) =>
   status === "approved"
     ? "bg-success text-success-foreground"
-    : status === "rejected"
-      ? "bg-destructive/10 text-destructive"
-      : status === "forwarded"
-        ? "bg-primary/10 text-primary"
-        : "bg-gold/20 text-gold";
+    : status === "completed"
+      ? "bg-emerald-600 text-white hover:bg-emerald-600"
+      : status === "rejected"
+        ? "bg-destructive/10 text-destructive"
+        : status === "forwarded"
+          ? "bg-primary/10 text-primary"
+          : "bg-gold/20 text-gold";
 
 function paymentMethodLabel(method: string | null): string {
-  if (method === "bank_transfer") return "Bank transfer";
+  if (method === "bank_transfer" || method === "bank") return "Bank transfer";
   if (method === "mpesa") return "M-Pesa";
   if (method === "cash") return "Cash";
   return method || "—";
@@ -193,7 +203,7 @@ function Page() {
   });
 
   useEffect(() => {
-    if (canReviewPayments) setReviewTab("pending-payments");
+    setReviewTab(canReviewPayments ? "pending-payments" : "loan-requests");
   }, [canReviewPayments]);
 
   useEffect(() => {
@@ -324,6 +334,7 @@ function Page() {
           memberPhone: profile.phone_number ?? undefined,
           memberName: profile.full_name ?? undefined,
           amount,
+          paymentMethod: selectedPayment.payment_method ?? undefined,
           reference: selectedPayment.payment_reference ?? undefined,
           installmentNumber: selectedPayment.installment_number,
           outstandingBalance,
@@ -388,6 +399,7 @@ function Page() {
           memberPhone: profile.phone_number ?? undefined,
           memberName: profile.full_name ?? undefined,
           amount: Number(selectedPayment.amount_due),
+          paymentMethod: selectedPayment.payment_method ?? undefined,
           reference: selectedPayment.payment_reference ?? undefined,
           installmentNumber: selectedPayment.installment_number,
           reason,
@@ -652,7 +664,7 @@ function Page() {
                             <TableCell>{fmt(Number(payment.loan?.amount ?? 0))}</TableCell>
                             <TableCell>#{payment.installment_number}</TableCell>
                             <TableCell className="font-medium">
-                              {fmt(Number(payment.amount_due))}
+                              {fmtAmount(Number(payment.amount_due))}
                             </TableCell>
                             <TableCell className="font-mono text-xs">
                               {payment.payment_reference ?? "—"}
@@ -843,8 +855,8 @@ function Page() {
           <DialogHeader>
             <DialogTitle>Confirm loan payment</DialogTitle>
             <DialogDescription>
-              Confirm payment of {fmt(Number(selectedPayment?.amount_due ?? 0))}? M-Pesa Ref:{" "}
-              {selectedPayment?.payment_reference ?? "—"}
+              Confirm payment of {fmtAmount(Number(selectedPayment?.amount_due ?? 0))}? Payment
+              reference: {selectedPayment?.payment_reference ?? "—"}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
