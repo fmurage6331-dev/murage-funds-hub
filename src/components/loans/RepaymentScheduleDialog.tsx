@@ -438,7 +438,11 @@ export function RepaymentScheduleDialog({
     setAmountToPay(
       String(Math.max(0, Number(repayment.amount_due) - Number(repayment.amount_paid))),
     );
-    setPaymentMethod((repayment.payment_method as PaymentMethod) || "mpesa");
+    setPaymentMethod(
+      repayment.payment_method === "bank"
+        ? "bank_transfer"
+        : (repayment.payment_method as PaymentMethod) || "mpesa",
+    );
     setReference(repayment.reference ?? "");
     setPaymentDate(today);
     setNotes(repayment.notes ?? "");
