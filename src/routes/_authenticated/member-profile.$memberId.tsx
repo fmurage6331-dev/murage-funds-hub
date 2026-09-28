@@ -296,12 +296,12 @@ function Page() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          {r.canConfirmContribs && (
+          {(r.isAdmin || r.isTreasurer) && (
             <Button onClick={() => setContribOpen(true)} className="gap-2">
               <PlusCircle className="h-4 w-4" /> Log Contribution
             </Button>
           )}
-          {r.canForwardLoans && (
+          {r.isFinanceOfficer && (
             <Button variant="outline" onClick={() => setLoanOpen(true)} className="gap-2">
               <HandCoins className="h-4 w-4" /> Log Loan
             </Button>
@@ -492,7 +492,7 @@ function Page() {
                     </div>
                     <RepaymentScheduleDialog
                       loan={loan}
-                      canRecordPayment={r.canConfirmContribs}
+                      canRecordPayment={r.isAdmin || r.isTreasurer}
                       memberEmail={profile?.email ?? undefined}
                     />
                   </div>

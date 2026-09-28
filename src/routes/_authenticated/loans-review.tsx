@@ -73,7 +73,7 @@ function Page() {
 
   const { data: loans = [], isLoading } = useQuery({
     queryKey: ["loans", "review"],
-    enabled: r.canForwardLoans || r.isBoard || r.isAdmin,
+    enabled: r.isFinanceOfficer,
     queryFn: async () =>
       (
         await supabase
@@ -86,7 +86,7 @@ function Page() {
   // Approved members query for the searchable member selector
   const { data: approvedMembers = [] } = useQuery({
     queryKey: ["approved-members-for-officer-entry"],
-    enabled: r.canForwardLoans,
+    enabled: r.isFinanceOfficer,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
@@ -222,7 +222,7 @@ function Page() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  if (!(r.canForwardLoans || r.isBoard || r.isAdmin)) {
+  if (!r.isFinanceOfficer) {
     return (
       <div className="text-sm text-muted-foreground">You do not have access to loan reviews.</div>
     );
@@ -237,7 +237,7 @@ function Page() {
             Chairman or treasurer forwards eligible requests to the board.
           </p>
         </div>
-        {r.canForwardLoans && (
+        {r.isFinanceOfficer && (
           <Button
             variant="outline"
             className="shrink-0 border-amber-300 text-amber-700 hover:bg-amber-50"
@@ -330,7 +330,7 @@ function Page() {
                       {fmt(Number(l.amount))}
                     </TableCell>
                     <TableCell>
-                      {l.status === "submitted" && r.canForwardLoans && (
+                      {l.status === "submitted" && r.isFinanceOfficer && (
                         <div className="flex gap-1">
                           <Button size="sm" onClick={() => forward.mutate({ id: l.id, loan: l })}>
                             <Send className="mr-1 h-3 w-3" /> Forward
@@ -347,7 +347,7 @@ function Page() {
                       {l.status === "approved" && (
                         <RepaymentScheduleDialog
                           loan={l}
-                          canRecordPayment={r.canConfirmContribs || r.isAdmin}
+                          canRecordPayment={r.isAdmin || r.isTreasurer}
                           memberEmail={p?.email}
                         />
                       )}

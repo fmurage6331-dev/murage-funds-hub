@@ -45,7 +45,7 @@ function AuditLogsPage() {
 
   const { data: logs = [], isLoading } = useQuery({
     queryKey: ["audit_logs", tableFilter, actionFilter],
-    enabled: r.isAdmin || r.canViewFinancials,
+    enabled: r.isFinanceOfficer,
     queryFn: async () => {
       let query = supabase
         .from("audit_logs")
@@ -66,7 +66,7 @@ function AuditLogsPage() {
     },
   });
 
-  if (!r.isAdmin && !r.canViewFinancials) {
+  if (!r.isFinanceOfficer) {
     return (
       <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">
         Access restricted. You do not have permission to view the audit log.

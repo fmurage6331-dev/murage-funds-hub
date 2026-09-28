@@ -100,7 +100,7 @@ function Page() {
           <h2 className="font-serif text-2xl font-semibold text-primary">Meetings</h2>
           <p className="text-sm text-muted-foreground">Upcoming meetings, agendas, and minutes.</p>
         </div>
-        {r.canManageMeetings && (
+        {r.isSecretariat && (
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
               <Button>
@@ -214,7 +214,7 @@ function Page() {
                     </div>
                   )}
                 </div>
-                {r.canManageMeetings && (
+                {r.isSecretariat && (
                   <Button
                     size="sm"
                     variant="outline"

@@ -86,7 +86,7 @@ function FinancialStatementsPage() {
     },
   });
 
-  if (!r.canViewFinancials) {
+  if (!r.isFinanceOfficer) {
     return (
       <div className="p-8 text-center text-sm text-muted-foreground">
         Access restricted to authorized officers.

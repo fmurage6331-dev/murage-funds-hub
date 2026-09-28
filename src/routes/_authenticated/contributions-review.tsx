@@ -66,7 +66,7 @@ function Page() {
 
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["contribs", "all"],
-    enabled: r.canConfirmContribs,
+    enabled: (r.isAdmin || r.isTreasurer),
     queryFn: async () => {
       const { data } = await supabase
         .from("contributions")
@@ -79,7 +79,7 @@ function Page() {
   // Approved members query for searchable select
   const { data: approvedMembers = [] } = useQuery({
     queryKey: ["approved-members-for-officer-entry"],
-    enabled: r.canConfirmContribs,
+    enabled: (r.isAdmin || r.isTreasurer),
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
@@ -195,7 +195,7 @@ function Page() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  if (!r.canConfirmContribs) {
+  if (!(r.isAdmin || r.isTreasurer)) {
     return (
       <div className="text-sm text-muted-foreground">
         Only the treasurer or admin can review contributions.
@@ -219,7 +219,7 @@ function Page() {
               Bulk Import CSV
             </Button>
           )}
-          {r.canConfirmContribs && (
+          {(r.isAdmin || r.isTreasurer) && (
             <Button onClick={() => setLogDialogOpen(true)} className="gap-2">
               <PlusCircle className="h-4 w-4" />
               Log Contribution for Member

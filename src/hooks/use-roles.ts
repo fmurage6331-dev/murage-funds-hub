@@ -4,18 +4,43 @@ import type { Database } from "@/integrations/supabase/types";
 
 export type Role = Database["public"]["Enums"]["app_role"];
 
+/** Roles that grant any kind of officer (non-member) capability. */
+export const OFFICER_ROLES: Role[] = [
+  "admin",
+  "treasurer",
+  "chairman",
+  "secretary",
+  "assistant_secretary",
+  "board_member",
+];
+
+/** Roles that may review contributions, transactions and financial statements. */
+export const FINANCE_OFFICER_ROLES: Role[] = ["admin", "treasurer", "chairman"];
+
+/** Roles that may manage meetings and donors. */
+export const SECRETARIAT_ROLES: Role[] = ["admin", "secretary", "assistant_secretary"];
+
 export function useRoles(userId: string | undefined) {
   const { data = [], isLoading } = useQuery({
     queryKey: ["roles", userId],
     enabled: !!userId,
     queryFn: async () => {
-      const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId!);
-      return (data?.map((r) => r.role) ?? []) as Role[];
+      try {
+        const { data, error } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", userId!);
+        if (error) throw error;
+        return (data?.map((row) => row.role) ?? []) as Role[];
+      } catch (error) {
+        console.error("Failed to load roles", error);
+        return [] as Role[];
+      }
     },
   });
 
-  const has = (r: Role) => data.includes(r);
-  const hasAny = (rs: Role[]) => rs.some((r) => data.includes(r));
+  const has = (role: Role) => data.includes(role);
+  const hasAny = (roles: Role[]) => roles.some((role) => data.includes(role));
 
   return {
     roles: data,
@@ -25,17 +50,12 @@ export function useRoles(userId: string | undefined) {
     isAdmin: has("admin"),
     isTreasurer: has("treasurer"),
     isChairman: has("chairman"),
-    isSecretary: hasAny(["secretary", "assistant_secretary"]),
-    isBoard: has("board_member"),
-    canConfirmContribs: hasAny(["admin", "treasurer"]),
-    canForwardLoans: hasAny(["admin", "chairman", "treasurer"]),
-    canManageMeetings: hasAny(["admin", "secretary", "assistant_secretary"]),
-    canViewFinancials: hasAny([
-      "admin",
-      "treasurer",
-      "chairman",
-      "secretary",
-      "assistant_secretary",
-    ]),
+    isSecretary: has("secretary"),
+    isAssistantSecretary: has("assistant_secretary"),
+    isBoardMember: has("board_member"),
+    isMember: has("member"),
+    isOfficer: hasAny(OFFICER_ROLES),
+    isFinanceOfficer: hasAny(FINANCE_OFFICER_ROLES),
+    isSecretariat: hasAny(SECRETARIAT_ROLES),
   };
 }

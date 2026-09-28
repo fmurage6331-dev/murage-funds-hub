@@ -35,7 +35,7 @@ function Page() {
 
   const { data: loans = [], isLoading } = useQuery({
     queryKey: ["board-loans"],
-    enabled: r.isBoard || r.isAdmin,
+    enabled: r.isAdmin || r.isBoardMember || r.isChairman,
     queryFn: async () =>
       (
         await supabase
@@ -63,7 +63,7 @@ function Page() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  if (!(r.isBoard || r.isAdmin)) {
+  if (!r.isAdmin && !r.isBoardMember && !r.isChairman) {
     return (
       <div className="text-sm text-muted-foreground">Only board members can vote on loans.</div>
     );
@@ -130,7 +130,7 @@ function Page() {
                 </div>
               </div>
 
-              {l.status === "forwarded" && r.isBoard && !myVote && (
+              {l.status === "forwarded" && r.isBoardMember && !myVote && (
                 <div className="mt-4 space-y-2 border-t border-border pt-4">
                   <Textarea
                     rows={2}

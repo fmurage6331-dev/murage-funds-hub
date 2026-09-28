@@ -94,9 +94,9 @@ function AuthedLayout() {
   ];
 
   const financeItems: Item[] = [];
-  if (r.canViewFinancials)
+  if (r.isFinanceOfficer)
     financeItems.push({ title: "Dashboard", url: "/dashboard", icon: LayoutDashboard });
-  if (r.canConfirmContribs)
+  if ((r.isAdmin || r.isTreasurer))
     financeItems.push({
       title: "Contributions Review",
       url: "/contributions-review",
@@ -104,21 +104,21 @@ function AuthedLayout() {
     });
   if (r.isAdmin || r.isTreasurer || r.isChairman)
     financeItems.push({ title: "Member Profiles", url: "/member-profile", icon: UserCircle });
-  if (r.canViewFinancials)
+  if (r.isFinanceOfficer)
     financeItems.push({ title: "Transactions", url: "/transactions", icon: Receipt });
-  if (r.canViewFinancials)
+  if (r.isFinanceOfficer)
     financeItems.push({
       title: "Financial Statements",
       url: "/financial-statements",
       icon: FileSpreadsheet,
     });
-  if (r.canForwardLoans || r.isBoard || r.isAdmin)
+  if (r.isFinanceOfficer || r.isBoardMember || r.isAdmin)
     financeItems.push({ title: "Loan Requests", url: "/loans-review", icon: Landmark });
-  if (r.isBoard || r.isAdmin)
+  if (r.isBoardMember || r.isAdmin)
     financeItems.push({ title: "Board Votes", url: "/loan-votes", icon: Gavel });
-  if (r.isSecretary || r.isAdmin)
+  if (r.isSecretariat || r.isAdmin)
     financeItems.push({ title: "Donors", url: "/donors", icon: Users });
-  if (r.canViewFinancials || r.isAdmin)
+  if (r.isFinanceOfficer || r.isAdmin)
     financeItems.push({ title: "Audit Trail", url: "/audit-logs", icon: ScrollText });
 
   const adminItems: Item[] = [];
