@@ -43,6 +43,39 @@ const fmt = (n: number) =>
     maximumFractionDigits: 0,
   }).format(n);
 
+interface LoanRepaymentItem {
+  id: string;
+  amount_due: number;
+  amount_paid: number | null;
+  status: string;
+  payment_status: string;
+  due_date: string;
+  paid_at: string | null;
+  payment_method: string | null;
+}
+interface LoanItem {
+  id: string;
+  amount: number;
+  status: string;
+  loan_type: "project" | "emergency";
+  member_id: string;
+  created_at: string;
+  decision_at: string | null;
+  repayment_months: number;
+  loan_repayments: LoanRepaymentItem[] | null;
+}
+
+const loanPaid = (l: LoanItem) =>
+  (l.loan_repayments ?? []).reduce((s, r) => s + Number(r.amount_paid ?? 0), 0);
+const loanScheduled = (l: LoanItem) =>
+  (l.loan_repayments ?? []).reduce((s, r) => s + Number(r.amount_due), 0);
+const loanOutstanding = (l: LoanItem) => {
+  if (l.status === "completed") return 0;
+  const scheduled = loanScheduled(l);
+  const base = scheduled > 0 ? scheduled : Number(l.amount);
+  return Math.max(0, base - loanPaid(l));
+};
+
 function FinancialStatementsPage() {
   const { user } = Route.useRouteContext();
   const r = useRoles(user.id);
@@ -68,7 +101,26 @@ function FinancialStatementsPage() {
   const { data: loans = [], isLoading: loansLoading } = useQuery({
     queryKey: ["loans", "statement"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("loans").select("*, loan_repayments(*)");
+      const { data, error } = await supabase.from("loans").select(`
+        id,
+        amount,
+        status,
+        loan_type,
+        member_id,
+        created_at,
+        decision_at,
+        repayment_months,
+        loan_repayments (
+          id,
+          amount_due,
+          amount_paid,
+          status,
+          payment_status,
+          due_date,
+          paid_at,
+          payment_method
+        )
+      `);
       if (error) throw error;
       return data ?? [];
     },
@@ -169,40 +221,44 @@ function FinancialStatementsPage() {
 
   const netSurplus = totalInflows - totalExpenses;
 
-  // Active Loan Portfolio Stats
-  interface LoanRepaymentItem {
-    amount_paid: number | null;
-    amount_due: number;
-    due_date: string;
-  }
-  interface LoanItem {
-    id: string;
-    amount: number;
-    status: string;
-    loan_repayments?: LoanRepaymentItem[];
-  }
-
-  const typedLoans = loans as unknown as LoanItem[];
-  const approvedLoans = typedLoans.filter((l) => l.status === "approved");
-  const totalLoanPrincipalDisbursed = approvedLoans.reduce((sum, l) => sum + Number(l.amount), 0);
-
-  let totalRepaidAcrossAllLoans = 0;
-  let totalOverdueBalance = 0;
-
-  approvedLoans.forEach((l) => {
-    const reps = l.loan_repayments || [];
-    reps.forEach((r) => {
-      totalRepaidAcrossAllLoans += Number(r.amount_paid || 0);
-      if (new Date(r.due_date) < new Date() && Number(r.amount_paid || 0) < Number(r.amount_due)) {
-        totalOverdueBalance += Number(r.amount_due) - Number(r.amount_paid || 0);
-      }
-    });
-  });
-
-  const outstandingLoanPortfolio = Math.max(
+  // Loan portfolio (all time, as at today)
+  const typedLoans = loans as LoanItem[];
+  const today = new Date().toISOString().split("T")[0];
+  const disbursedLoans = typedLoans.filter((l) => ["approved", "completed"].includes(l.status));
+  const activeLoans = typedLoans.filter((l) => l.status === "approved");
+  const completedLoans = typedLoans.filter((l) => l.status === "completed");
+  const sumAmount = (ls: LoanItem[]) => ls.reduce((s, l) => s + Number(l.amount), 0);
+  const totalDisbursed = sumAmount(disbursedLoans);
+  const activePortfolio = sumAmount(activeLoans);
+  const completedPortfolio = sumAmount(completedLoans);
+  const totalRepaid = disbursedLoans.reduce((s, l) => s + loanPaid(l), 0);
+  // Outstanding = scheduled amount still owed (principal + interest); completed loans owe 0
+  const outstandingBalance = disbursedLoans.reduce((s, l) => s + loanOutstanding(l), 0);
+  const parAmount = activeLoans.reduce(
+    (sum, l) =>
+      sum +
+      (l.loan_repayments ?? []).reduce((s, r) => {
+        const paid = Number(r.amount_paid ?? 0);
+        const due = Number(r.amount_due);
+        return r.due_date < today && paid < due ? s + (due - paid) : s;
+      }, 0),
     0,
-    totalLoanPrincipalDisbursed - totalRepaidAcrossAllLoans,
   );
+  const parRatioNum = activePortfolio > 0 ? (parAmount / activePortfolio) * 100 : 0;
+  const parRatio = parRatioNum.toFixed(2);
+  const totalDueSoFar = disbursedLoans.reduce(
+    (sum, l) =>
+      sum +
+      (l.loan_repayments ?? []).reduce(
+        (s, r) => (r.due_date <= today ? s + Number(r.amount_due) : s),
+        0,
+      ),
+    0,
+  );
+  const collectionRate =
+    totalDueSoFar > 0 ? Math.min(100, (totalRepaid / totalDueSoFar) * 100).toFixed(1) : "100.0";
+  const totalOverdueBalance = parAmount;
+  const outstandingLoanPortfolio = outstandingBalance;
 
   const handlePrint = () => {
     window.print();
