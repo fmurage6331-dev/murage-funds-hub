@@ -98,6 +98,7 @@ function MyContributionsPage() {
       setOpen(false);
       setForm({ ...form, amount: "", reference: "", notes: "" });
       qc.invalidateQueries({ queryKey: ["my-contribs"] });
+      qc.invalidateQueries({ queryKey: ["contributions-review"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -110,6 +111,7 @@ function MyContributionsPage() {
     onSuccess: () => {
       toast.success("Removed");
       qc.invalidateQueries({ queryKey: ["my-contribs"] });
+      qc.invalidateQueries({ queryKey: ["contributions-review"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });

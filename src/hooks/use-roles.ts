@@ -1,41 +1,32 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import type { Database } from "@/integrations/supabase/types";
+import { hasAnyRole, hasRole, roleFlags, type Role } from "@/lib/rbac";
 
-export type Role = Database["public"]["Enums"]["app_role"];
+export type { Role, RoleFlags } from "@/lib/rbac";
 
 export function useRoles(userId: string | undefined) {
   const { data = [], isLoading } = useQuery({
     queryKey: ["roles", userId],
     enabled: !!userId,
     queryFn: async () => {
-      const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId!);
-      return (data?.map((r) => r.role) ?? []) as Role[];
+      try {
+        const { data, error } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", userId!);
+        if (error) throw error;
+        return (data?.map((row) => row.role) ?? []) as Role[];
+      } catch (error) {
+        console.error("Failed to load roles", error);
+        return [] as Role[];
+      }
     },
   });
 
-  const has = (r: Role) => data.includes(r);
-  const hasAny = (rs: Role[]) => rs.some((r) => data.includes(r));
-
   return {
-    roles: data,
+    ...roleFlags(data),
     isLoading,
-    has,
-    hasAny,
-    isAdmin: has("admin"),
-    isTreasurer: has("treasurer"),
-    isChairman: has("chairman"),
-    isSecretary: hasAny(["secretary", "assistant_secretary"]),
-    isBoard: has("board_member"),
-    canConfirmContribs: hasAny(["admin", "treasurer"]),
-    canForwardLoans: hasAny(["admin", "chairman", "treasurer"]),
-    canManageMeetings: hasAny(["admin", "secretary", "assistant_secretary"]),
-    canViewFinancials: hasAny([
-      "admin",
-      "treasurer",
-      "chairman",
-      "secretary",
-      "assistant_secretary",
-    ]),
+    has: (role: Role) => hasRole(data, role),
+    hasAny: (roles: Role[]) => hasAnyRole(data, roles),
   };
 }

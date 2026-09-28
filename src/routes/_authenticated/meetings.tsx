@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -16,14 +15,26 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Card } from "@/components/ui/card";
-import { Plus, CalendarDays, MapPin, FileText } from "lucide-react";
+import { Plus, Pencil, Trash2, CalendarDays, MapPin, FileText } from "lucide-react";
 import { toast } from "sonner";
+import type { Tables } from "@/integrations/supabase/types";
 import { useRoles } from "@/hooks/use-roles";
 import { notifyNewMeeting } from "@/lib/notifications";
 
 export const Route = createFileRoute("/_authenticated/meetings")({
   component: Page,
 });
+
+/** A meeting row with its minutes embedded. */
+type MeetingRow = Tables<"meetings"> & { meeting_minutes?: Tables<"meeting_minutes">[] };
+
+/** Convert an ISO timestamp to the `YYYY-MM-DDTHH:mm` shape datetime-local wants. */
+function toLocalInputValue(iso: string) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const offset = date.getTimezoneOffset() * 60000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+}
 
 function Page() {
   const { user } = Route.useRouteContext();
@@ -32,26 +43,66 @@ function Page() {
 
   const { data: meetings = [], isLoading } = useQuery({
     queryKey: ["meetings"],
-    queryFn: async () =>
-      (
-        await supabase
+    queryFn: async () => {
+      try {
+        const { data, error } = await supabase
           .from("meetings")
           .select("*, meeting_minutes(*)")
-          .order("scheduled_for", { ascending: false })
-      ).data ?? [],
+          .order("scheduled_for", { ascending: false });
+        if (error) throw error;
+        return (data ?? []) as MeetingRow[];
+      } catch (error) {
+        console.error("Failed to load meetings", error);
+        toast.error("Could not load meetings.");
+        return [];
+      }
+    },
   });
 
   const [open, setOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ title: "", scheduled_for: "", location: "", agenda: "" });
 
-  const create = useMutation({
+  const closeDialog = () => {
+    setOpen(false);
+    setEditingId(null);
+    setForm({ title: "", scheduled_for: "", location: "", agenda: "" });
+  };
+
+  const startEdit = (meeting: (typeof meetings)[number]) => {
+    setEditingId(meeting.id);
+    setForm({
+      title: meeting.title,
+      // datetime-local expects a local "YYYY-MM-DDTHH:mm" value.
+      scheduled_for: toLocalInputValue(meeting.scheduled_for),
+      location: meeting.location ?? "",
+      agenda: meeting.agenda ?? "",
+    });
+    setOpen(true);
+  };
+
+  const save = useMutation({
     mutationFn: async () => {
+      if (!form.title.trim()) throw new Error("Title is required.");
       const scheduledIso = new Date(form.scheduled_for).toISOString();
-      const { error } = await supabase.from("meetings").insert({
+      if (Number.isNaN(new Date(scheduledIso).getTime()))
+        throw new Error("Pick a valid date and time.");
+
+      const payload = {
         title: form.title,
         scheduled_for: scheduledIso,
         location: form.location || null,
         agenda: form.agenda || null,
+      };
+
+      if (editingId) {
+        const { error } = await supabase.from("meetings").update(payload).eq("id", editingId);
+        if (error) throw error;
+        return;
+      }
+
+      const { error } = await supabase.from("meetings").insert({
+        ...payload,
         created_by: user.id,
       });
       if (error) throw error;
@@ -64,10 +115,21 @@ function Page() {
       }).catch((e) => console.warn("Failed broadcasting meeting notification", e));
     },
     onSuccess: () => {
-      toast.success("Meeting scheduled. All members can see it.");
-      setOpen(false);
-      setForm({ title: "", scheduled_for: "", location: "", agenda: "" });
-      qc.invalidateQueries({ queryKey: ["meetings"] });
+      toast.success(editingId ? "Meeting updated." : "Meeting scheduled. All members can see it.");
+      closeDialog();
+      void qc.invalidateQueries({ queryKey: ["meetings"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const del = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("meetings").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Meeting deleted");
+      void qc.invalidateQueries({ queryKey: ["meetings"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -88,7 +150,7 @@ function Page() {
       toast.success("Minutes saved");
       setMinutesOpen(null);
       setMinutesText("");
-      qc.invalidateQueries({ queryKey: ["meetings"] });
+      void qc.invalidateQueries({ queryKey: ["meetings"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -100,21 +162,29 @@ function Page() {
           <h2 className="font-serif text-2xl font-semibold text-primary">Meetings</h2>
           <p className="text-sm text-muted-foreground">Upcoming meetings, agendas, and minutes.</p>
         </div>
-        {r.canManageMeetings && (
-          <Dialog open={open} onOpenChange={setOpen}>
+        {r.isSecretariat && (
+          <Dialog open={open} onOpenChange={(next) => (next ? setOpen(true) : closeDialog())}>
             <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" /> Schedule meeting
+              <Button
+                onClick={() => {
+                  setEditingId(null);
+                  setForm({ title: "", scheduled_for: "", location: "", agenda: "" });
+                  setOpen(true);
+                }}
+              >
+                <Plus className="mr-2 h-4 w-4" /> New Meeting
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle className="font-serif">New meeting</DialogTitle>
+                <DialogTitle className="font-serif">
+                  {editingId ? "Edit meeting" : "New meeting"}
+                </DialogTitle>
               </DialogHeader>
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
-                  create.mutate();
+                  save.mutate();
                 }}
                 className="space-y-3"
               >
@@ -151,8 +221,8 @@ function Page() {
                   />
                 </div>
                 <DialogFooter>
-                  <Button type="submit" disabled={create.isPending}>
-                    {create.isPending ? "Saving…" : "Notify members"}
+                  <Button type="submit" disabled={save.isPending}>
+                    {save.isPending ? "Saving…" : editingId ? "Save changes" : "Notify members"}
                   </Button>
                 </DialogFooter>
               </form>
@@ -167,11 +237,7 @@ function Page() {
         <Card className="p-8 text-center text-muted-foreground">No meetings scheduled.</Card>
       ) : (
         meetings.map((m) => {
-          const minutes = ((m as any).meeting_minutes ?? []) as {
-            id: string;
-            content: string;
-            created_at: string;
-          }[];
+          const minutes = m.meeting_minutes ?? [];
           const upcoming = new Date(m.scheduled_for) > new Date();
           return (
             <Card key={m.id} className="p-5">
@@ -214,18 +280,43 @@ function Page() {
                     </div>
                   )}
                 </div>
-                {r.canManageMeetings && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      setMinutesOpen(m.id);
-                      setMinutesText("");
-                    }}
-                  >
-                    Add minutes
-                  </Button>
-                )}
+                <div className="flex shrink-0 flex-wrap justify-end gap-2">
+                  {r.isSecretariat && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={save.isPending || del.isPending}
+                      onClick={() => startEdit(m)}
+                    >
+                      <Pencil className="mr-1 h-3.5 w-3.5" /> Edit
+                    </Button>
+                  )}
+                  {r.isSecretariat && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={addMinutes.isPending}
+                      onClick={() => {
+                        setMinutesOpen(m.id);
+                        setMinutesText("");
+                      }}
+                    >
+                      Add minutes
+                    </Button>
+                  )}
+                  {r.isAdmin && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={del.isPending}
+                      onClick={() => {
+                        if (confirm(`Delete "${m.title}"?`)) del.mutate(m.id);
+                      }}
+                    >
+                      <Trash2 className="mr-1 h-3.5 w-3.5 text-destructive" /> Delete
+                    </Button>
+                  )}
+                </div>
               </div>
             </Card>
           );

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -33,13 +32,30 @@ import {
 import { Check, PlusCircle, Search, Send, X } from "lucide-react";
 import { toast } from "sonner";
 import { useState, useMemo } from "react";
+import { UnauthorizedCard } from "@/components/shared/UnauthorizedCard";
+import type { Tables } from "@/integrations/supabase/types";
 import { useRoles } from "@/hooks/use-roles";
+import { attachMemberProfiles } from "@/lib/member-profiles";
 import { RepaymentScheduleDialog } from "@/components/loans/RepaymentScheduleDialog";
 import { notifyLoanStatusChange } from "@/lib/notifications";
 
 export const Route = createFileRoute("/_authenticated/loans-review")({
   component: Page,
 });
+
+/** Minimal shape of the embedded repayment rows used for the overdue badge. */
+type RepaymentRow = {
+  status: string;
+  due_date: string;
+  amount_paid: number;
+  amount_due: number;
+};
+
+/** A loan row plus the member profile merged in client-side. */
+type LoanRow = Tables<"loans"> & {
+  profiles?: { full_name: string | null; email: string | null } | null;
+  loan_repayments?: RepaymentRow[];
+};
 
 const fmt = (n: number) =>
   new Intl.NumberFormat("en-KE", {
@@ -73,20 +89,29 @@ function Page() {
 
   const { data: loans = [], isLoading } = useQuery({
     queryKey: ["loans", "review"],
-    enabled: r.canForwardLoans || r.isBoard || r.isAdmin,
-    queryFn: async () =>
-      (
-        await supabase
+    enabled: r.isFinanceOfficer,
+    queryFn: async () => {
+      try {
+        // `loans.member_id` points at `auth.users`, so the `profiles` embed is
+        // unresolvable; repayments have a real FK and stay embedded.
+        const { data, error } = await supabase
           .from("loans")
-          .select("*, profiles:member_id(full_name, email), loan_repayments(*)")
-          .order("created_at", { ascending: false })
-      ).data ?? [],
+          .select("*, loan_repayments(*)")
+          .order("created_at", { ascending: false });
+        if (error) throw error;
+        return (await attachMemberProfiles(data ?? [])) as LoanRow[];
+      } catch (error) {
+        console.error("Failed to load loan requests", error);
+        toast.error("Could not load loan requests.");
+        return [];
+      }
+    },
   });
 
   // Approved members query for the searchable member selector
   const { data: approvedMembers = [] } = useQuery({
     queryKey: ["approved-members-for-officer-entry"],
-    enabled: r.canForwardLoans,
+    enabled: r.isFinanceOfficer,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
@@ -160,7 +185,7 @@ function Page() {
   };
 
   const forward = useMutation({
-    mutationFn: async ({ id, loan }: { id: string; loan?: any }) => {
+    mutationFn: async ({ id, loan }: { id: string; loan?: LoanRow }) => {
       const { error } = await supabase
         .from("loans")
         .update({
@@ -174,7 +199,7 @@ function Page() {
       if (loan?.profiles?.email) {
         notifyLoanStatusChange({
           memberEmail: loan.profiles.email,
-          memberName: loan.profiles.full_name,
+          memberName: loan.profiles.full_name ?? undefined,
           loanAmount: Number(loan.amount),
           loanType: loan.loan_type,
           status: "forwarded",
@@ -190,7 +215,7 @@ function Page() {
   });
 
   const reject = useMutation({
-    mutationFn: async ({ id, loan }: { id: string; loan?: any }) => {
+    mutationFn: async ({ id, loan }: { id: string; loan?: LoanRow }) => {
       const reason = prompt("Rejection reason?") ?? "";
       if (!reason) throw new Error("Reason required");
       const { error } = await supabase
@@ -206,7 +231,7 @@ function Page() {
       if (loan?.profiles?.email) {
         notifyLoanStatusChange({
           memberEmail: loan.profiles.email,
-          memberName: loan.profiles.full_name,
+          memberName: loan.profiles.full_name ?? undefined,
           loanAmount: Number(loan.amount),
           loanType: loan.loan_type,
           status: "rejected",
@@ -222,10 +247,43 @@ function Page() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  if (!(r.canForwardLoans || r.isBoard || r.isAdmin)) {
+  const canDecide = r.isChairman || r.isAdmin;
+
+  const approve = useMutation({
+    mutationFn: async ({ id, loan }: { id: string; loan: LoanRow }) => {
+      const { error } = await supabase
+        .from("loans")
+        .update({ status: "approved", decision_at: new Date().toISOString() })
+        .eq("id", id);
+      if (error) throw error;
+
+      const profile = loan.profiles ?? null;
+      if (profile?.email) {
+        void notifyLoanStatusChange({
+          memberEmail: profile.email,
+          memberName: profile.full_name ?? undefined,
+          loanAmount: Number(loan.amount),
+          loanType: loan.loan_type,
+          status: "approved",
+          repaymentMonths: loan.repayment_months,
+        }).catch((e) => console.warn("Failed sending loan status notification", e));
+      }
+    },
+    onSuccess: () => {
+      toast.success("Loan approved");
+      void qc.invalidateQueries({ queryKey: ["loans"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  if (r.isLoading) {
     return (
-      <div className="text-sm text-muted-foreground">You do not have access to loan reviews.</div>
+      <div className="py-16 text-center text-sm text-muted-foreground">Checking permissions…</div>
     );
+  }
+
+  if (!r.isAdmin && !r.isTreasurer && !r.isChairman) {
+    return <UnauthorizedCard message="This page is restricted to officers." />;
   }
 
   return (
@@ -234,16 +292,16 @@ function Page() {
         <div>
           <h2 className="font-serif text-2xl font-semibold text-primary">Loan Requests</h2>
           <p className="text-sm text-muted-foreground">
-            Chairman or treasurer forwards eligible requests to the board.
+            The treasurer forwards eligible requests; the chairman or admin gives final approval.
           </p>
         </div>
-        {r.canForwardLoans && (
+        {r.isFinanceOfficer && (
           <Button
             variant="outline"
             className="shrink-0 border-amber-300 text-amber-700 hover:bg-amber-50"
             onClick={() => setLogDialogOpen(true)}
           >
-            <PlusCircle className="mr-2 h-4 w-4" /> Log Loan for Member
+            <PlusCircle className="mr-2 h-4 w-4" /> Submit Loan for Member
           </Button>
         )}
       </div>
@@ -277,7 +335,7 @@ function Page() {
               </TableRow>
             ) : (
               loans.map((l) => {
-                const p = (l as any).profiles;
+                const p = l.profiles ?? null;
                 return (
                   <TableRow key={l.id}>
                     <TableCell>
@@ -308,12 +366,12 @@ function Page() {
                         <Badge className={statusColor(l.status)}>{l.status}</Badge>
                         {l.status === "approved" &&
                           (() => {
-                            const reps = (l as any).loan_repayments || [];
+                            const reps = l.loan_repayments ?? [];
                             const overdueCount = reps.filter(
-                              (r: any) =>
-                                r.status === "overdue" ||
-                                (new Date(r.due_date) < new Date() &&
-                                  Number(r.amount_paid) < Number(r.amount_due)),
+                              (repayment) =>
+                                repayment.status === "overdue" ||
+                                (new Date(repayment.due_date) < new Date() &&
+                                  Number(repayment.amount_paid) < Number(repayment.amount_due)),
                             ).length;
                             return overdueCount > 0 ? (
                               <Badge
@@ -330,27 +388,44 @@ function Page() {
                       {fmt(Number(l.amount))}
                     </TableCell>
                     <TableCell>
-                      {l.status === "submitted" && r.canForwardLoans && (
-                        <div className="flex gap-1">
-                          <Button size="sm" onClick={() => forward.mutate({ id: l.id, loan: l })}>
-                            <Send className="mr-1 h-3 w-3" /> Forward
-                          </Button>
+                      <div className="flex flex-wrap gap-1">
+                        {l.status === "submitted" && (r.isTreasurer || r.isAdmin) && (
                           <Button
                             size="sm"
-                            variant="ghost"
-                            onClick={() => reject.mutate({ id: l.id, loan: l })}
+                            disabled={forward.isPending}
+                            onClick={() => forward.mutate({ id: l.id, loan: l })}
                           >
-                            Reject
+                            <Send className="mr-1 h-3 w-3" />
+                            {forward.isPending ? "Forwarding…" : "Forward to Chairman"}
                           </Button>
-                        </div>
-                      )}
-                      {l.status === "approved" && (
-                        <RepaymentScheduleDialog
-                          loan={l}
-                          canRecordPayment={r.canConfirmContribs || r.isAdmin}
-                          memberEmail={p?.email}
-                        />
-                      )}
+                        )}
+                        {canDecide && (l.status === "submitted" || l.status === "forwarded") && (
+                          <>
+                            <Button
+                              size="sm"
+                              disabled={approve.isPending || reject.isPending}
+                              onClick={() => approve.mutate({ id: l.id, loan: l })}
+                            >
+                              {approve.isPending ? "Approving…" : "Approve"}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              disabled={approve.isPending || reject.isPending}
+                              onClick={() => reject.mutate({ id: l.id, loan: l })}
+                            >
+                              Reject
+                            </Button>
+                          </>
+                        )}
+                        {l.status === "approved" && (
+                          <RepaymentScheduleDialog
+                            loan={l}
+                            canRecordPayment={r.isAdmin || r.isTreasurer}
+                            memberEmail={p?.email ?? undefined}
+                          />
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 );

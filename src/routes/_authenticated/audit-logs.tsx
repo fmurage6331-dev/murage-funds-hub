@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ShieldCheck, Eye, Search, Lock } from "lucide-react";
+import { UnauthorizedCard } from "@/components/shared/UnauthorizedCard";
 import { useRoles } from "@/hooks/use-roles";
 
 export const Route = createFileRoute("/_authenticated/audit-logs")({
@@ -45,7 +46,7 @@ function AuditLogsPage() {
 
   const { data: logs = [], isLoading } = useQuery({
     queryKey: ["audit_logs", tableFilter, actionFilter],
-    enabled: r.isAdmin || r.canViewFinancials,
+    enabled: r.isFinanceOfficer,
     queryFn: async () => {
       let query = supabase
         .from("audit_logs")
@@ -66,12 +67,14 @@ function AuditLogsPage() {
     },
   });
 
-  if (!r.isAdmin && !r.canViewFinancials) {
+  if (r.isLoading) {
     return (
-      <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">
-        Access restricted. You do not have permission to view the audit log.
-      </div>
+      <div className="py-16 text-center text-sm text-muted-foreground">Checking permissions…</div>
     );
+  }
+
+  if (!r.isAdmin && !r.isTreasurer && !r.isChairman) {
+    return <UnauthorizedCard message="This page is restricted to officers." />;
   }
 
   const filteredLogs = logs.filter((log) => {

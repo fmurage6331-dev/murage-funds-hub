@@ -1,7 +1,7 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import type { Tables } from "@/integrations/supabase/types";
 import { Card } from "@/components/ui/card";
 import {
   Table,
@@ -23,6 +23,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -32,14 +33,31 @@ import {
 } from "@/components/ui/select";
 import { Check, X, PlusCircle, Search, Upload } from "lucide-react";
 import { toast } from "sonner";
+import { UnauthorizedCard } from "@/components/shared/UnauthorizedCard";
 import { useRoles } from "@/hooks/use-roles";
+import { attachMemberProfiles, embeddedProfile } from "@/lib/member-profiles";
 import { notifyContributionReview } from "@/lib/notifications";
 import { ContributionImportPanel } from "@/components/contributions/ContributionImportPanel";
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 export const Route = createFileRoute("/_authenticated/contributions-review")({
   component: Page,
 });
+
+/** Query key shared by the review list, its realtime invalidation and mutations. */
+const CONTRIBUTIONS_REVIEW_KEY = ["contributions-review"] as const;
+
+/**
+ * `contributions.member_id` points at `auth.users(id)`, so there is no direct
+ * FK to `public.profiles` and the `profiles (...)` embed is not guaranteed to
+ * resolve. Try it once, then fall back to the merged loader for the session.
+ */
+let profilesEmbedSupported = true;
+
+type ContributionStatus = "all" | "pending" | "confirmed" | "rejected";
+
+/** A contribution row plus the member profile (embedded, or merged client-side). */
+type ContributionRow = Tables<"contributions"> & { profiles?: unknown };
 
 const fmt = (n: number) =>
   new Intl.NumberFormat("en-KE", {
@@ -51,9 +69,13 @@ const fmt = (n: number) =>
 function Page() {
   const { user } = Route.useRouteContext();
   const r = useRoles(user.id);
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
 
-  // Log on behalf dialog state
+  // ── Status tabs — "Pending" is the default so new member submissions are
+  //    the first thing the treasurer sees. ────────────────────────────────
+  const [statusTab, setStatusTab] = useState<ContributionStatus>("pending");
+
+  // ── Log on behalf dialog state ────────────────────────────────────────
   const [logDialogOpen, setLogDialogOpen] = useState(false);
   const [selectedMemberId, setSelectedMemberId] = useState("");
   const [memberSearch, setMemberSearch] = useState("");
@@ -64,32 +86,109 @@ function Page() {
   const [notes, setNotes] = useState("");
   const [importDialogOpen, setImportDialogOpen] = useState(false);
 
-  const { data: rows = [], isLoading } = useQuery({
-    queryKey: ["contribs", "all"],
-    enabled: r.canConfirmContribs,
+  const canReview = r.isAdmin || r.isTreasurer;
+
+  /**
+   * Every contribution, newest first, with the member profile joined in.
+   *
+   * No status filter is applied server-side: RLS already limits the treasurer
+   * to rows they are allowed to see, and filtering here previously hid pending
+   * member submissions.
+   */
+  const {
+    data: contributions = [],
+    isLoading,
+    isFetching,
+    error: contributionsError,
+  } = useQuery<ContributionRow[]>({
+    queryKey: [...CONTRIBUTIONS_REVIEW_KEY],
+    enabled: canReview,
     queryFn: async () => {
-      const { data } = await supabase
-        .from("contributions")
-        .select("*, profiles:member_id(full_name, email)")
-        .order("created_at", { ascending: false });
-      return data ?? [];
+      try {
+        if (profilesEmbedSupported) {
+          const { data, error } = await supabase
+            .from("contributions")
+            .select(
+              `
+                *,
+                profiles (
+                  full_name,
+                  email,
+                  phone_number
+                )
+              `,
+            )
+            .order("created_at", { ascending: false });
+
+          if (!error) {
+            // The generated schema types cannot describe this embed, so the
+            // payload is asserted to the row shape this page renders.
+            return (data ?? []) as unknown as ContributionRow[];
+          }
+
+          // `contributions.member_id` references `auth.users`, not
+          // `public.profiles`, so PostgREST may be unable to resolve the
+          // embed. Stop retrying it and switch to the merged loader — the
+          // review queue must never be blank because of a schema-cache miss.
+          profilesEmbedSupported = false;
+          console.warn("[contributions-review] profiles embed unavailable, using merge:", error);
+        }
+
+        return await loadContributionsWithProfiles();
+      } catch (error) {
+        throw error instanceof Error ? error : new Error("Failed to load contributions.");
+      }
+    },
+    refetchOnWindowFocus: true,
+    refetchInterval: 15000,
+    staleTime: 0,
+  });
+
+  /** Approved members query for the searchable select. */
+  const { data: approvedMembers = [] } = useQuery({
+    queryKey: ["approved-members-for-officer-entry"],
+    enabled: canReview,
+    queryFn: async () => {
+      try {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("id, full_name, phone_number, email")
+          .eq("status", "approved")
+          .order("full_name");
+        if (error) throw error;
+        return data ?? [];
+      } catch (error) {
+        console.error("Failed to load approved members", error);
+        toast.error("Could not load the member list.");
+        return [];
+      }
     },
   });
 
-  // Approved members query for searchable select
-  const { data: approvedMembers = [] } = useQuery({
-    queryKey: ["approved-members-for-officer-entry"],
-    enabled: r.canConfirmContribs,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id, full_name, phone_number, email")
-        .eq("status", "approved")
-        .order("full_name");
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
+  /**
+   * Realtime: new member contributions appear instantly instead of waiting for
+   * the polling interval or a manual refresh.
+   */
+  useEffect(() => {
+    const channel = supabase
+      .channel("contributions-realtime")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "contributions",
+        },
+        () => {
+          void queryClient.invalidateQueries({ queryKey: [...CONTRIBUTIONS_REVIEW_KEY] });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
 
   const filteredMembers = useMemo(() => {
     if (!memberSearch.trim()) return approvedMembers;
@@ -104,10 +203,26 @@ function Page() {
 
   const currentRole = r.isAdmin ? "admin" : r.isTreasurer ? "treasurer" : "officer";
 
-  // References already on record, used to skip duplicate M-Pesa refs on import
+  /** References already on record, used to skip duplicate M-Pesa refs on import. */
   const existingRefs = useMemo(
-    () => rows.map((row) => row.reference ?? "").filter((ref) => ref !== ""),
-    [rows],
+    () => contributions.map((row) => row.reference ?? "").filter((ref) => ref !== ""),
+    [contributions],
+  );
+
+  const counts = useMemo(() => {
+    const tally = { pending: 0, confirmed: 0, rejected: 0 };
+    contributions.forEach((row) => {
+      if (row.status === "pending" || row.status === "confirmed" || row.status === "rejected") {
+        tally[row.status] += 1;
+      }
+    });
+    return tally;
+  }, [contributions]);
+
+  const visibleRows = useMemo(
+    () =>
+      statusTab === "all" ? contributions : contributions.filter((x) => x.status === statusTab),
+    [contributions, statusTab],
   );
 
   const logOnBehalfMutation = useMutation({
@@ -147,7 +262,7 @@ function Page() {
       setContribDate(new Date().toISOString().slice(0, 10));
       setPaymentMethod("mpesa");
       setNotes("");
-      qc.invalidateQueries({ queryKey: ["contribs"] });
+      void queryClient.invalidateQueries({ queryKey: [...CONTRIBUTIONS_REVIEW_KEY] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -165,7 +280,7 @@ function Page() {
     }: {
       id: string;
       status: "confirmed" | "rejected";
-      row?: any;
+      row?: ContributionRow;
     }) => {
       const { error } = await supabase
         .from("contributions")
@@ -177,40 +292,48 @@ function Page() {
         .eq("id", id);
       if (error) throw error;
 
-      if (row?.profiles?.email) {
-        notifyContributionReview({
-          memberEmail: row.profiles.email,
-          memberName: row.profiles.full_name,
-          amount: Number(row.amount),
+      const profile = row ? embeddedProfile(row.profiles) : null;
+      if (profile?.email) {
+        void notifyContributionReview({
+          memberEmail: profile.email,
+          memberName: profile.full_name ?? undefined,
+          amount: Number(row?.amount ?? 0),
           status,
-          method: row.method,
-          reference: row.reference,
+          method: row?.method,
+          reference: row?.reference ?? undefined,
         }).catch((e) => console.warn("Failed sending notification", e));
       }
     },
-    onSuccess: () => {
-      toast.success("Updated");
-      qc.invalidateQueries({ queryKey: ["contribs"] });
+    onSuccess: (_result, variables) => {
+      toast.success(
+        variables.status === "confirmed" ? "Contribution confirmed" : "Contribution rejected",
+      );
+      void queryClient.invalidateQueries({ queryKey: [...CONTRIBUTIONS_REVIEW_KEY] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
 
-  if (!r.canConfirmContribs) {
+  const pendingActionId = setStatus.isPending ? setStatus.variables?.id : undefined;
+
+  if (r.isLoading) {
     return (
-      <div className="text-sm text-muted-foreground">
-        Only the treasurer or admin can review contributions.
-      </div>
+      <div className="py-16 text-center text-sm text-muted-foreground">Checking permissions…</div>
     );
   }
 
-  const pending = rows.filter((x) => x.status === "pending");
+  if (!r.isAdmin && !r.isTreasurer) {
+    return <UnauthorizedCard message="This page is restricted to treasurers." />;
+  }
 
   return (
     <div className="mx-auto max-w-6xl space-y-4">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h2 className="font-serif text-2xl font-semibold text-primary">Contributions Review</h2>
-          <p className="text-sm text-muted-foreground">{pending.length} pending confirmation.</p>
+          <p className="text-sm text-muted-foreground">
+            {counts.pending} pending confirmation
+            {isFetching ? " · refreshing…" : ""}.
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {r.isAdmin && (
@@ -219,7 +342,7 @@ function Page() {
               Bulk Import CSV
             </Button>
           )}
-          {r.canConfirmContribs && (
+          {canReview && (
             <Button onClick={() => setLogDialogOpen(true)} className="gap-2">
               <PlusCircle className="h-4 w-4" />
               Log Contribution for Member
@@ -227,6 +350,16 @@ function Page() {
           )}
         </div>
       </div>
+
+      <Tabs value={statusTab} onValueChange={(value) => setStatusTab(value as ContributionStatus)}>
+        <TabsList>
+          <TabsTrigger value="pending">Pending ({counts.pending})</TabsTrigger>
+          <TabsTrigger value="confirmed">Confirmed ({counts.confirmed})</TabsTrigger>
+          <TabsTrigger value="rejected">Rejected ({counts.rejected})</TabsTrigger>
+          <TabsTrigger value="all">All ({contributions.length})</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
       <Card>
         <Table>
           <TableHeader>
@@ -247,27 +380,38 @@ function Page() {
                   Loading…
                 </TableCell>
               </TableRow>
-            ) : rows.length === 0 ? (
+            ) : contributionsError ? (
+              <TableRow>
+                <TableCell colSpan={7} className="py-8 text-center text-destructive">
+                  Could not load contributions: {contributionsError.message}
+                </TableCell>
+              </TableRow>
+            ) : visibleRows.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
-                  No contributions yet.
+                  {statusTab === "pending"
+                    ? "No contributions awaiting confirmation."
+                    : "No contributions to show."}
                 </TableCell>
               </TableRow>
             ) : (
-              rows.map((row) => {
-                const p = (row as any).profiles;
+              visibleRows.map((row) => {
+                const profile = embeddedProfile(row.profiles);
+                const busy = pendingActionId === row.id;
                 return (
                   <TableRow key={row.id}>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <div className="font-medium">{p?.full_name ?? "—"}</div>
-                        {row.on_behalf_of && (
+                        <div className="font-medium">{profile?.full_name ?? "Unknown"}</div>
+                        {row.on_behalf_of === true && (
                           <Badge className="bg-amber-600 text-white text-[10px] px-1.5 py-0">
                             Officer Entry
                           </Badge>
                         )}
                       </div>
-                      <div className="text-xs text-muted-foreground">{p?.email}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {profile?.email ?? profile?.phone_number ?? "No contact on file"}
+                      </div>
                     </TableCell>
                     <TableCell>{new Date(row.contributed_on).toLocaleDateString()}</TableCell>
                     <TableCell className="capitalize">{row.method}</TableCell>
@@ -289,25 +433,39 @@ function Page() {
                       {fmt(Number(row.amount))}
                     </TableCell>
                     <TableCell>
-                      {row.status === "pending" && (
+                      {row.status === "pending" && canReview && (
                         <div className="flex gap-1">
                           <Button
                             size="icon"
                             variant="ghost"
+                            aria-label="Confirm contribution"
+                            disabled={setStatus.isPending}
                             onClick={() =>
                               setStatus.mutate({ id: row.id, status: "confirmed", row })
                             }
                           >
-                            <Check className="h-4 w-4 text-success" />
+                            <Check
+                              className={
+                                busy ? "h-4 w-4 animate-pulse text-success" : "h-4 w-4 text-success"
+                              }
+                            />
                           </Button>
                           <Button
                             size="icon"
                             variant="ghost"
+                            aria-label="Reject contribution"
+                            disabled={setStatus.isPending}
                             onClick={() =>
                               setStatus.mutate({ id: row.id, status: "rejected", row })
                             }
                           >
-                            <X className="h-4 w-4 text-destructive" />
+                            <X
+                              className={
+                                busy
+                                  ? "h-4 w-4 animate-pulse text-destructive"
+                                  : "h-4 w-4 text-destructive"
+                              }
+                            />
                           </Button>
                         </div>
                       )}
@@ -466,4 +624,17 @@ function Page() {
       </Dialog>
     </div>
   );
+}
+
+/**
+ * Fallback loader used when PostgREST cannot resolve the `profiles` embed:
+ * fetch both tables and merge on the client so member names still render.
+ */
+async function loadContributionsWithProfiles(): Promise<ContributionRow[]> {
+  const { data, error } = await supabase
+    .from("contributions")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (await attachMemberProfiles(data ?? [])) as ContributionRow[];
 }

@@ -40,10 +40,31 @@ import {
   Gavel,
   ScrollText,
   FileSpreadsheet,
+  User,
   UserCircle,
   Database,
 } from "lucide-react";
 import { useRoles } from "@/hooks/use-roles";
+import { buildNavigation, type NavIcon } from "@/lib/rbac";
+
+/** Sidebar icons keyed by the identifiers returned by `buildNavigation`. */
+const NAV_ICONS = {
+  dashboard: LayoutDashboard,
+  wallet: Wallet,
+  "hand-coins": HandCoins,
+  "calendar-days": CalendarDays,
+  user: User,
+  "shield-check": ShieldCheck,
+  receipt: Receipt,
+  landmark: Landmark,
+  "file-spreadsheet": FileSpreadsheet,
+  "user-circle": UserCircle,
+  "scroll-text": ScrollText,
+  users: Users,
+  gavel: Gavel,
+  settings: Settings,
+  database: Database,
+} satisfies Record<NavIcon, typeof LayoutDashboard>;
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
@@ -85,50 +106,8 @@ function AuthedLayout() {
     }
   };
 
-  type Item = { title: string; url: string; icon: typeof LayoutDashboard };
-
-  const memberItems: Item[] = [
-    { title: "My Contributions", url: "/my-contributions", icon: Wallet },
-    { title: "My Loans", url: "/my-loans", icon: HandCoins },
-    { title: "Meetings", url: "/meetings", icon: CalendarDays },
-  ];
-
-  const financeItems: Item[] = [];
-  if (r.canViewFinancials)
-    financeItems.push({ title: "Dashboard", url: "/dashboard", icon: LayoutDashboard });
-  if (r.canConfirmContribs)
-    financeItems.push({
-      title: "Contributions Review",
-      url: "/contributions-review",
-      icon: ShieldCheck,
-    });
-  if (r.isAdmin || r.isTreasurer || r.isChairman)
-    financeItems.push({ title: "Member Profiles", url: "/member-profile", icon: UserCircle });
-  if (r.canViewFinancials)
-    financeItems.push({ title: "Transactions", url: "/transactions", icon: Receipt });
-  if (r.canViewFinancials)
-    financeItems.push({
-      title: "Financial Statements",
-      url: "/financial-statements",
-      icon: FileSpreadsheet,
-    });
-  if (r.canForwardLoans || r.isBoard || r.isAdmin)
-    financeItems.push({ title: "Loan Requests", url: "/loans-review", icon: Landmark });
-  if (r.isBoard || r.isAdmin)
-    financeItems.push({ title: "Board Votes", url: "/loan-votes", icon: Gavel });
-  if (r.isSecretary || r.isAdmin)
-    financeItems.push({ title: "Donors", url: "/donors", icon: Users });
-  if (r.canViewFinancials || r.isAdmin)
-    financeItems.push({ title: "Audit Trail", url: "/audit-logs", icon: ScrollText });
-
-  const adminItems: Item[] = [];
-  if (r.isAdmin) {
-    adminItems.push({ title: "Users & Roles", url: "/users", icon: Users });
-    adminItems.push({ title: "Data Import", url: "/data-import", icon: Database });
-    adminItems.push({ title: "Loan Rules", url: "/loan-rules", icon: Settings });
-  }
-
-  const allItems = [...memberItems, ...financeItems, ...adminItems];
+  const sections = buildNavigation(r.roles);
+  const allItems = sections.flatMap((section) => section.items);
   const isActiveItem = (url: string) => path === url || path.startsWith(`${url}/`);
   const activeTitle = allItems.find((i) => isActiveItem(i.url))?.title ?? "Overview";
 
@@ -153,63 +132,33 @@ function AuthedLayout() {
           </SidebarHeader>
 
           <SidebarContent>
-            <SidebarGroup>
-              <SidebarGroupLabel>My Account</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {memberItems.map((item) => (
-                    <SidebarMenuItem key={item.url}>
-                      <SidebarMenuButton asChild isActive={isActiveItem(item.url)}>
-                        <Link to={item.url} className="flex items-center gap-2">
-                          <item.icon className="h-4 w-4" />
-                          <span>{item.title}</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-
-            {financeItems.length > 0 && (
-              <SidebarGroup>
-                <SidebarGroupLabel>Foundation</SidebarGroupLabel>
+            {sections.map((section) => (
+              <SidebarGroup key={section.label}>
+                <SidebarGroupLabel>{section.label}</SidebarGroupLabel>
                 <SidebarGroupContent>
                   <SidebarMenu>
-                    {financeItems.map((item) => (
-                      <SidebarMenuItem key={item.url}>
-                        <SidebarMenuButton asChild isActive={isActiveItem(item.url)}>
-                          <Link to={item.url} className="flex items-center gap-2">
-                            <item.icon className="h-4 w-4" />
-                            <span>{item.title}</span>
-                          </Link>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    ))}
+                    {section.items.map((item) => {
+                      const Icon = NAV_ICONS[item.icon];
+                      return (
+                        <SidebarMenuItem key={item.url}>
+                          <SidebarMenuButton asChild isActive={isActiveItem(item.url)}>
+                            <Link to={item.url} className="flex items-center gap-2">
+                              <Icon className="h-4 w-4" />
+                              <span>{item.title}</span>
+                              {item.hint && (
+                                <span className="ml-auto text-[10px] text-sidebar-foreground/50 group-data-[collapsible=icon]:hidden">
+                                  {item.hint}
+                                </span>
+                              )}
+                            </Link>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      );
+                    })}
                   </SidebarMenu>
                 </SidebarGroupContent>
               </SidebarGroup>
-            )}
-
-            {adminItems.length > 0 && (
-              <SidebarGroup>
-                <SidebarGroupLabel>Admin</SidebarGroupLabel>
-                <SidebarGroupContent>
-                  <SidebarMenu>
-                    {adminItems.map((item) => (
-                      <SidebarMenuItem key={item.url}>
-                        <SidebarMenuButton asChild isActive={isActiveItem(item.url)}>
-                          <Link to={item.url} className="flex items-center gap-2">
-                            <item.icon className="h-4 w-4" />
-                            <span>{item.title}</span>
-                          </Link>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    ))}
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              </SidebarGroup>
-            )}
+            ))}
           </SidebarContent>
 
           <SidebarFooter className="border-t border-sidebar-border">

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -32,12 +31,26 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Download, FileSpreadsheet } from "lucide-react";
+import { Plus, Pencil, Trash2, Download, FileSpreadsheet } from "lucide-react";
 import { toast } from "sonner";
+import { UnauthorizedCard } from "@/components/shared/UnauthorizedCard";
+import { useRoles } from "@/hooks/use-roles";
 
 export const Route = createFileRoute("/_authenticated/transactions")({
   component: TransactionsPage,
 });
+
+type TransactionRow = Awaited<ReturnType<typeof loadTransactions>>[number];
+
+type TransactionForm = {
+  type: "income" | "expense";
+  category: string;
+  amount: string;
+  occurred_on: string;
+  description: string;
+  donor_id: string;
+  reference: string;
+};
 
 const fmt = (n: number) =>
   new Intl.NumberFormat("en-KE", {
@@ -58,40 +71,62 @@ const EXPENSE_CATS = [
   "Other expense",
 ];
 
+async function loadTransactions() {
+  try {
+    const { data, error } = await supabase
+      .from("transactions")
+      .select("*, donors(name)")
+      .order("occurred_on", { ascending: false });
+    if (error) throw error;
+    return data ?? [];
+  } catch (error) {
+    console.error("Failed to load transactions", error);
+    toast.error("Could not load transactions.");
+    return [];
+  }
+}
+
+async function loadDonorOptions() {
+  try {
+    const { data, error } = await supabase.from("donors").select("id, name").order("name");
+    if (error) throw error;
+    return data ?? [];
+  } catch (error) {
+    console.error("Failed to load donors", error);
+    return [];
+  }
+}
+
+function donorName(tx: TransactionRow) {
+  const joined = tx.donors;
+  if (!joined) return "—";
+  return Array.isArray(joined) ? (joined[0]?.name ?? "—") : joined.name;
+}
+
 function TransactionsPage() {
   const qc = useQueryClient();
   const { user } = Route.useRouteContext();
 
-  const { data: role = [] } = useQuery({
-    queryKey: ["role", user.id],
-    queryFn: async () =>
-      (await supabase.from("user_roles").select("role").eq("user_id", user.id)).data?.map(
-        (r) => r.role,
-      ) ?? [],
-  });
-  const isAdmin = role.includes("admin");
+  const r = useRoles(user.id);
+  const canManageTransactions = r.isAdmin || r.isTreasurer;
 
   const { data: txs = [], isLoading } = useQuery({
     queryKey: ["transactions", "all"],
-    queryFn: async () =>
-      (
-        await supabase
-          .from("transactions")
-          .select("*, donors(name)")
-          .order("occurred_on", { ascending: false })
-      ).data ?? [],
+    enabled: canManageTransactions,
+    queryFn: loadTransactions,
   });
 
   const { data: donors = [] } = useQuery({
     queryKey: ["donors", "list"],
-    queryFn: async () =>
-      (await supabase.from("donors").select("id, name").order("name")).data ?? [],
+    enabled: canManageTransactions,
+    queryFn: loadDonorOptions,
   });
 
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({
-    type: "income" as "income" | "expense",
-    category: "Donation",
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState<TransactionForm>({
+    type: "income",
+    category: INCOME_CATS[0],
     amount: "",
     occurred_on: new Date().toISOString().slice(0, 10),
     description: "",
@@ -99,26 +134,64 @@ function TransactionsPage() {
     reference: "",
   });
 
-  const createTx = useMutation({
+  const closeDialog = () => {
+    setOpen(false);
+    setEditingId(null);
+    setForm({
+      type: "income",
+      category: INCOME_CATS[0],
+      amount: "",
+      occurred_on: new Date().toISOString().slice(0, 10),
+      description: "",
+      donor_id: "",
+      reference: "",
+    });
+  };
+
+  const startEdit = (tx: TransactionRow) => {
+    setEditingId(tx.id);
+    setForm({
+      type: tx.type,
+      category: tx.category,
+      amount: String(tx.amount),
+      occurred_on: tx.occurred_on,
+      description: tx.description ?? "",
+      donor_id: tx.donor_id ?? "",
+      reference: tx.reference ?? "",
+    });
+    setOpen(true);
+  };
+
+  const save = useMutation({
     mutationFn: async () => {
+      const parsedAmount = Number(form.amount);
+      if (isNaN(parsedAmount) || parsedAmount <= 0) throw new Error("Amount must be positive.");
+
       const payload = {
         type: form.type,
         category: form.category,
-        amount: Number(form.amount),
+        amount: parsedAmount,
         occurred_on: form.occurred_on,
         description: form.description || null,
         donor_id: form.donor_id || null,
         reference: form.reference || null,
-        created_by: user.id,
       };
-      const { error } = await supabase.from("transactions").insert(payload);
+
+      if (editingId) {
+        const { error } = await supabase.from("transactions").update(payload).eq("id", editingId);
+        if (error) throw error;
+        return;
+      }
+
+      const { error } = await supabase
+        .from("transactions")
+        .insert({ ...payload, created_by: user.id });
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("Transaction added");
-      setOpen(false);
-      setForm({ ...form, amount: "", description: "", reference: "", donor_id: "" });
-      qc.invalidateQueries({ queryKey: ["transactions"] });
+      toast.success(editingId ? "Transaction updated" : "Transaction added");
+      closeDialog();
+      void qc.invalidateQueries({ queryKey: ["transactions"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -130,7 +203,7 @@ function TransactionsPage() {
     },
     onSuccess: () => {
       toast.success("Deleted");
-      qc.invalidateQueries({ queryKey: ["transactions"] });
+      void qc.invalidateQueries({ queryKey: ["transactions"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -147,7 +220,7 @@ function TransactionsPage() {
         String(t.amount),
         t.currency,
         t.description ?? "",
-        (t as any).donors?.name ?? "",
+        donorName(t),
         t.reference ?? "",
       ]),
     );
@@ -165,6 +238,16 @@ function TransactionsPage() {
 
   const cats = form.type === "income" ? INCOME_CATS : EXPENSE_CATS;
 
+  if (r.isLoading) {
+    return (
+      <div className="py-16 text-center text-sm text-muted-foreground">Checking permissions…</div>
+    );
+  }
+
+  if (!r.isAdmin && !r.isTreasurer) {
+    return <UnauthorizedCard message="This page is restricted to treasurers." />;
+  }
+
   return (
     <div className="mx-auto max-w-6xl space-y-4">
       <div className="flex items-center justify-between">
@@ -181,21 +264,28 @@ function TransactionsPage() {
           <Button variant="outline" onClick={exportCsv} disabled={txs.length === 0}>
             <Download className="mr-2 h-4 w-4" /> Export CSV
           </Button>
-          {isAdmin && (
-            <Dialog open={open} onOpenChange={setOpen}>
+          {canManageTransactions && (
+            <Dialog open={open} onOpenChange={(next) => (next ? setOpen(true) : closeDialog())}>
               <DialogTrigger asChild>
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" /> New transaction
+                <Button
+                  onClick={() => {
+                    setEditingId(null);
+                    setOpen(true);
+                  }}
+                >
+                  <Plus className="mr-2 h-4 w-4" /> Add Transaction
                 </Button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle className="font-serif">Add transaction</DialogTitle>
+                  <DialogTitle className="font-serif">
+                    {editingId ? "Edit transaction" : "Add transaction"}
+                  </DialogTitle>
                 </DialogHeader>
                 <form
                   onSubmit={(e) => {
                     e.preventDefault();
-                    createTx.mutate();
+                    save.mutate();
                   }}
                   className="space-y-3"
                 >
@@ -299,8 +389,8 @@ function TransactionsPage() {
                     />
                   </div>
                   <DialogFooter>
-                    <Button type="submit" disabled={createTx.isPending}>
-                      {createTx.isPending ? "Saving..." : "Save"}
+                    <Button type="submit" disabled={save.isPending}>
+                      {save.isPending ? "Saving..." : "Save"}
                     </Button>
                   </DialogFooter>
                 </form>
@@ -320,7 +410,7 @@ function TransactionsPage() {
               <TableHead>Donor</TableHead>
               <TableHead>Description</TableHead>
               <TableHead className="text-right">Amount</TableHead>
-              {isAdmin && <TableHead />}
+              {canManageTransactions && <TableHead />}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -353,9 +443,7 @@ function TransactionsPage() {
                     </Badge>
                   </TableCell>
                   <TableCell>{t.category}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {(t as any).donors?.name ?? "—"}
-                  </TableCell>
+                  <TableCell className="text-muted-foreground">{donorName(t)}</TableCell>
                   <TableCell className="max-w-xs truncate text-muted-foreground">
                     {t.description ?? "—"}
                   </TableCell>
@@ -365,17 +453,32 @@ function TransactionsPage() {
                     {t.type === "income" ? "+" : "−"}
                     {fmt(Number(t.amount))}
                   </TableCell>
-                  {isAdmin && (
+                  {canManageTransactions && (
                     <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => {
-                          if (confirm("Delete this transaction?")) del.mutate(t.id);
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
+                      <div className="flex justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label="Edit transaction"
+                          disabled={save.isPending || del.isPending}
+                          onClick={() => startEdit(t)}
+                        >
+                          <Pencil className="h-4 w-4 text-muted-foreground" />
+                        </Button>
+                        {r.isAdmin && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Delete transaction"
+                            disabled={del.isPending}
+                            onClick={() => {
+                              if (confirm("Delete this transaction?")) del.mutate(t.id);
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   )}
                 </TableRow>

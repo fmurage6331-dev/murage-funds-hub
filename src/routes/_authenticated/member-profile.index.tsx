@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Search, UserCircle } from "lucide-react";
 import { useRoles } from "@/hooks/use-roles";
+import { UnauthorizedCard } from "@/components/shared/UnauthorizedCard";
 
 export const Route = createFileRoute("/_authenticated/member-profile/")({
   component: Page,
@@ -33,12 +34,14 @@ function Page() {
     },
   });
 
-  if (!canView) {
+  if (r.isLoading) {
     return (
-      <div className="text-sm text-muted-foreground">
-        Only the chairman, treasurer or admin can view member profiles.
-      </div>
+      <div className="py-16 text-center text-sm text-muted-foreground">Checking permissions…</div>
     );
+  }
+
+  if (!r.isAdmin && !r.isTreasurer && !r.isChairman) {
+    return <UnauthorizedCard message="This page is restricted to officers." />;
   }
 
   const query = search.trim().toLowerCase();

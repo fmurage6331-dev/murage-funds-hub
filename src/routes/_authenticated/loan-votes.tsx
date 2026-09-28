@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -8,11 +7,22 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { UnauthorizedCard } from "@/components/shared/UnauthorizedCard";
+import type { Tables } from "@/integrations/supabase/types";
 import { useRoles } from "@/hooks/use-roles";
+import { attachMemberProfiles } from "@/lib/member-profiles";
 
 export const Route = createFileRoute("/_authenticated/loan-votes")({
   component: Page,
 });
+
+type VoteRow = Tables<"loan_votes">;
+
+/** A loan row with its board votes embedded and the member profile merged in. */
+type LoanRow = Tables<"loans"> & {
+  loan_votes?: VoteRow[];
+  profiles?: { full_name: string | null; email: string | null } | null;
+};
 
 const fmt = (n: number) =>
   new Intl.NumberFormat("en-KE", {
@@ -35,15 +45,24 @@ function Page() {
 
   const { data: loans = [], isLoading } = useQuery({
     queryKey: ["board-loans"],
-    enabled: r.isBoard || r.isAdmin,
-    queryFn: async () =>
-      (
-        await supabase
+    enabled: r.isAdmin || r.isBoardMember || r.isChairman,
+    queryFn: async () => {
+      try {
+        // `loans.member_id` points at `auth.users`, so the `profiles` embed is
+        // unresolvable; `loan_votes` has a real FK and stays embedded.
+        const { data, error } = await supabase
           .from("loans")
-          .select("*, profiles:member_id(full_name, email), loan_votes(*)")
+          .select("*, loan_votes(*)")
           .in("status", ["forwarded", "approved", "rejected"])
-          .order("forwarded_at", { ascending: false })
-      ).data ?? [],
+          .order("forwarded_at", { ascending: false });
+        if (error) throw error;
+        return (await attachMemberProfiles(data ?? [])) as LoanRow[];
+      } catch (error) {
+        console.error("Failed to load board votes", error);
+        toast.error("Could not load loan votes.");
+        return [];
+      }
+    },
   });
 
   const vote = useMutation({
@@ -63,10 +82,14 @@ function Page() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  if (!(r.isBoard || r.isAdmin)) {
+  if (r.isLoading) {
     return (
-      <div className="text-sm text-muted-foreground">Only board members can vote on loans.</div>
+      <div className="py-16 text-center text-sm text-muted-foreground">Checking permissions…</div>
     );
+  }
+
+  if (!r.isAdmin && !r.isBoardMember && !r.isChairman) {
+    return <UnauthorizedCard message="This page is restricted to board members." />;
   }
 
   return (
@@ -84,15 +107,11 @@ function Page() {
         <Card className="p-8 text-center text-muted-foreground">Nothing to vote on.</Card>
       ) : (
         loans.map((l) => {
-          const votes = (l as any).loan_votes as {
-            vote: string;
-            board_member_id: string;
-            comment: string | null;
-          }[];
+          const votes: VoteRow[] = l.loan_votes ?? [];
           const approves = votes.filter((v) => v.vote === "approve").length;
           const rejects = votes.filter((v) => v.vote === "reject").length;
           const myVote = votes.find((v) => v.board_member_id === user.id);
-          const p = (l as any).profiles;
+          const p = l.profiles ?? null;
           return (
             <Card key={l.id} className="p-5">
               <div className="flex items-start justify-between gap-4">
@@ -130,7 +149,7 @@ function Page() {
                 </div>
               </div>
 
-              {l.status === "forwarded" && r.isBoard && !myVote && (
+              {l.status === "forwarded" && r.isBoardMember && !myVote && (
                 <div className="mt-4 space-y-2 border-t border-border pt-4">
                   <Textarea
                     rows={2}
