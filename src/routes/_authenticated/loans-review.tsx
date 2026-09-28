@@ -245,7 +245,8 @@ function Page() {
 
   const openConfirmDialog = (payment: PendingPayment) => {
     setSelectedPayment(payment);
-    setConfirmedAmount(String(Number(payment.amount_due)));
+    const remaining = Math.max(0, Number(payment.amount_due) - Number(payment.amount_paid || 0));
+    setConfirmedAmount(String(remaining));
     setConfirmDialogOpen(true);
   };
 
@@ -271,12 +272,18 @@ function Page() {
         if (authError) throw authError;
         if (!officer) throw new Error("Please sign in again before confirming a payment.");
 
+        const currentPaid = Number(selectedPayment.amount_paid || 0);
+        const remaining = Math.max(0, Number(selectedPayment.amount_due) - currentPaid);
+        if (amount > remaining) {
+          throw new Error("The amount received cannot exceed the remaining installment balance.");
+        }
+        const newTotalPaid = currentPaid + amount;
         const confirmedAt = new Date().toISOString();
-        const status = amount >= Number(selectedPayment.amount_due) ? "paid" : "partial";
+        const status = newTotalPaid >= Number(selectedPayment.amount_due) ? "paid" : "partial";
         const { data: updated, error } = await supabase
           .from("loan_repayments")
           .update({
-            amount_paid: amount,
+            amount_paid: newTotalPaid,
             payment_status: "confirmed",
             status,
             paid_at: confirmedAt,
