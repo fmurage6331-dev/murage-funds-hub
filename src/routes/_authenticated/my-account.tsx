@@ -2,7 +2,15 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
-import { KeyRound, Mail, Phone, ShieldCheck, User as UserIcon } from "lucide-react";
+import {
+  Download,
+  FileSpreadsheet,
+  KeyRound,
+  Mail,
+  Phone,
+  ShieldCheck,
+  User as UserIcon,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,6 +18,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useRoles } from "@/hooks/use-roles";
+import { downloadCsv } from "@/lib/csv-import";
+import {
+  ALL_STATEMENT_SECTIONS,
+  buildMemberStatementCsv,
+  buildMemberStatementHtml,
+  openPrintWindow,
+  resolvePeriod,
+  statementFileName,
+} from "@/lib/export-documents";
+import { loadMemberStatementData } from "@/lib/financial-data";
+
+/** Shared cache key for the member's own statement data. */
+const MY_STATEMENT_KEY = "my-statement";
 
 export const Route = createFileRoute("/_authenticated/my-account")({
   component: MyAccountPage,
@@ -36,6 +57,7 @@ function MyAccountPage() {
 
   const [newPhone, setNewPhone] = useState("");
   const [resetSentTo, setResetSentTo] = useState<string | null>(null);
+  const [statementBusy, setStatementBusy] = useState<"pdf" | "csv" | null>(null);
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ["my-account-profile", user.id],
@@ -85,6 +107,54 @@ function MyAccountPage() {
     },
     onError: (error: Error) => toast.error(error.message),
   });
+
+  /**
+   * Keep the member's own statement records warm so the download buttons can
+   * open the print window immediately (pop-up blockers reject late windows).
+   */
+  const { data: statementData } = useQuery({
+    queryKey: [MY_STATEMENT_KEY, user.id],
+    queryFn: () => loadMemberStatementData(user.id),
+    staleTime: 60_000,
+  });
+
+  const generateStatement = async (format: "pdf" | "csv") => {
+    setStatementBusy(format);
+    try {
+      const data = statementData ?? (await loadMemberStatementData(user.id));
+
+      // Members download their own complete record: all time, every section.
+      const options = {
+        period: resolvePeriod({ key: "all" }),
+        sections: ALL_STATEMENT_SECTIONS,
+        generatedBy: data.profile?.full_name ?? profile?.full_name ?? "Member",
+      };
+
+      if (format === "pdf") {
+        const opened = openPrintWindow(
+          "Murage Foundation - Member Financial Statement",
+          buildMemberStatementHtml(data, options),
+          "portrait",
+        );
+        if (!opened) {
+          toast.error("Allow pop-ups for this site to open your statement.");
+          return;
+        }
+        toast.success("Your statement is ready — print or save it as PDF.");
+        return;
+      }
+
+      downloadCsv(
+        statementFileName(data.profile?.full_name ?? profile?.full_name),
+        buildMemberStatementCsv(data, options),
+      );
+      toast.success("Your statement has been downloaded (opens in Excel).");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not generate your statement.");
+    } finally {
+      setStatementBusy(null);
+    }
+  };
 
   const accountEmail = profile?.email ?? user.email ?? "";
   const currentPhone = profile?.phone_number ?? "";
@@ -273,6 +343,42 @@ function MyAccountPage() {
               Password reset email sent to {resetSentTo}
             </p>
           )}
+        </CardContent>
+      </Card>
+
+      {/* ── Section 4 · Download own financial statement ────────────── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 font-serif">
+            <Download className="h-5 w-5 text-primary" /> My Financial Statement
+          </CardTitle>
+          <CardDescription>
+            Download your complete contribution history, loan summary, repayment schedule and
+            account standing — no need to ask the treasurer.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-3">
+          <Button
+            onClick={() => void generateStatement("pdf")}
+            disabled={statementBusy !== null}
+            className="gap-2"
+          >
+            <Download className="h-4 w-4" />
+            {statementBusy === "pdf" ? "Preparing…" : "Download My Statement (PDF)"}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => void generateStatement("csv")}
+            disabled={statementBusy !== null}
+            className="gap-2 border-green-600 text-green-700 hover:bg-green-50 hover:text-green-800"
+          >
+            <FileSpreadsheet className="h-4 w-4" />
+            {statementBusy === "csv" ? "Preparing…" : "Download as Excel"}
+          </Button>
+          <p className="w-full text-xs text-muted-foreground">
+            Statement covers all time and is generated by your browser — the PDF opens the system
+            print dialog (choose “Save as PDF”).
+          </p>
         </CardContent>
       </Card>
     </div>
