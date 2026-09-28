@@ -39,6 +39,7 @@ import { attachMemberProfiles, embeddedProfile } from "@/lib/member-profiles";
 import { notifyContributionReview } from "@/lib/notifications";
 import { ContributionImportPanel } from "@/components/contributions/ContributionImportPanel";
 import { ContributionExportButtons } from "@/components/contributions/ContributionExportButtons";
+import { MemberStatementDialog } from "@/components/exports/MemberStatementDialog";
 import { capitalise } from "@/lib/export-documents";
 import { useEffect, useMemo, useState } from "react";
 
@@ -87,6 +88,7 @@ function Page() {
   const [paymentMethod, setPaymentMethod] = useState("mpesa");
   const [notes, setNotes] = useState("");
   const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [statementMemberId, setStatementMemberId] = useState<string | null>(null);
 
   const canReview = r.isAdmin || r.isTreasurer;
 
@@ -229,6 +231,13 @@ function Page() {
 
   /** Describes the active status tab on the exported documents. */
   const exportScopeLabel = statusTab === "all" ? "All statuses" : `${capitalise(statusTab)} only`;
+
+  /** Member behind the open statement dialog, for its heading text. */
+  const statementMemberName = useMemo(() => {
+    if (!statementMemberId) return null;
+    const row = contributions.find((item) => item.member_id === statementMemberId);
+    return row ? (embeddedProfile(row.profiles)?.full_name ?? null) : null;
+  }, [contributions, statementMemberId]);
 
   const logOnBehalfMutation = useMutation({
     mutationFn: async () => {
@@ -446,6 +455,19 @@ function Page() {
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1">
+                        {canReview && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            aria-label={`Generate statement for ${
+                              profile?.full_name ?? "this member"
+                            }`}
+                            title="Generate Statement"
+                            onClick={() => setStatementMemberId(row.member_id)}
+                          >
+                            <FileText className="h-4 w-4 text-primary" />
+                          </Button>
+                        )}
                         {row.status === "pending" && canReview && (
                           <>
                             <Button
@@ -638,6 +660,17 @@ function Page() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ── Member statement generator (treasurer / admin) ───────── */}
+      <MemberStatementDialog
+        open={statementMemberId !== null}
+        onOpenChange={(open) => {
+          if (!open) setStatementMemberId(null);
+        }}
+        memberId={statementMemberId}
+        memberName={statementMemberName}
+        generatedBy={r.isAdmin ? "Admin" : "Treasurer"}
+      />
     </div>
   );
 }

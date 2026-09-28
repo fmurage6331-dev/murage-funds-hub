@@ -32,7 +32,16 @@ import {
 } from "@/components/ui/dialog";
 import { useRoles } from "@/hooks/use-roles";
 import { RepaymentScheduleDialog } from "@/components/loans/RepaymentScheduleDialog";
-import { ArrowLeft, CalendarDays, HandCoins, PlusCircle, ShieldCheck, Wallet } from "lucide-react";
+import {
+  ArrowLeft,
+  CalendarDays,
+  FileText,
+  HandCoins,
+  PlusCircle,
+  ShieldCheck,
+  Wallet,
+} from "lucide-react";
+import { MemberStatementDialog } from "@/components/exports/MemberStatementDialog";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/member-profile/$memberId")({
@@ -159,6 +168,9 @@ function Page() {
   }, [repayments]);
 
   const currentRole = r.isAdmin ? "admin" : r.isChairman ? "chairman" : "treasurer";
+
+  // ── Quick action: printable statement for this member ──
+  const [statementOpen, setStatementOpen] = useState(false);
 
   // ── Quick action: contribution on behalf of this member ──
   const [contribOpen, setContribOpen] = useState(false);
@@ -296,6 +308,11 @@ function Page() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          {(r.isAdmin || r.isTreasurer) && (
+            <Button variant="outline" onClick={() => setStatementOpen(true)} className="gap-2">
+              <FileText className="h-4 w-4" /> Generate Statement
+            </Button>
+          )}
           {(r.isAdmin || r.isTreasurer) && (
             <Button onClick={() => setContribOpen(true)} className="gap-2">
               <PlusCircle className="h-4 w-4" /> Log Contribution
@@ -712,6 +729,15 @@ function Page() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* ── Member financial statement ───────── */}
+      <MemberStatementDialog
+        open={statementOpen}
+        onOpenChange={setStatementOpen}
+        memberId={memberId}
+        memberName={profile?.full_name ?? null}
+        generatedBy={r.isAdmin ? "Admin" : "Treasurer"}
+      />
     </div>
   );
 }
