@@ -504,3 +504,185 @@ test("a profile write failure deletes the new Auth user so a retry is not blocke
     false,
   );
 });
+
+/* ── Admin password reset (resetMemberPassword) ─────────────────────────── */
+
+const resetBody = { action: "resetMemberPassword", userId };
+
+test("resetMemberPassword is admin-only and validates the user id", async () => {
+  const denied = setup({ nonAdmin: true });
+  assert.equal((await denied.request(resetBody)).status, 403);
+  assert.equal(denied.calls.length, 0);
+
+  const invalid = setup();
+  assert.equal((await invalid.request({ action: "resetMemberPassword" })).status, 400);
+  assert.equal(
+    (await invalid.request({ action: "resetMemberPassword", userId: "bad" })).status,
+    400,
+  );
+  assert.equal(invalid.calls.length, 0);
+});
+
+test("resetMemberPassword restores the default password and re-arms the warning flag", async () => {
+  const { request, calls } = setup();
+  const response = await request(resetBody);
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).success, true);
+
+  const update = calls.find((call) => call[0] === "updateUser");
+  assert.equal(update[1], userId);
+  assert.equal(update[2].password, DEFAULT_PASSWORD);
+  // This member already signs in with their synthetic email, so no identity change is needed.
+  assert.equal(update[2].email, undefined);
+
+  const profileWrite = calls.find((call) => call[0] === "update" && call[1] === "profiles");
+  assert.equal(profileWrite[2].is_default_password, true);
+  assert.equal(profileWrite[2].phone_only_member, false);
+});
+
+test("every reset lands in the append-only audit log without recording the password", async () => {
+  const { request, calls } = setup();
+  assert.equal((await request(resetBody)).status, 200);
+  const audit = calls.find((call) => call[0] === "insert" && call[1] === "audit_logs");
+  assert.equal(audit[2].action, "password_reset_by_admin");
+  assert.equal(audit[2].table_name, "auth.users");
+  assert.equal(audit[2].record_id, userId);
+  assert.equal(audit[2].performed_by, "verified-admin");
+  assert.equal(audit[2].performed_by_email, "admin@example.com");
+  assert.deepEqual([...audit[2].changed_fields], ["password", "is_default_password"]);
+  assert.equal(audit[2].new_values.event, "password_reset_by_admin");
+  assert.equal(audit[2].new_values.member_name, "Jane Doe");
+  assert.equal(JSON.stringify(audit[2]).includes(DEFAULT_PASSWORD), false);
+});
+
+test("a CHECK-constrained audit action falls back to an UPDATE row naming the event", async () => {
+  const { request, calls } = setup({ auditCheckFailure: true });
+  const response = await request(resetBody);
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).warning, undefined);
+  const audits = calls.filter((call) => call[0] === "insert" && call[1] === "audit_logs");
+  assert.equal(audits.length, 2);
+  assert.equal(audits[0][2].action, "password_reset_by_admin");
+  assert.equal(audits[1][2].action, "UPDATE");
+  assert.equal(audits[1][2].new_values.event, "password_reset_by_admin");
+  assert.equal(audits[1][2].record_id, userId);
+});
+
+test("an unwritable audit log still resets the password but warns the admin", async () => {
+  const { request, calls } = setup({ auditCheckFailure: true, auditInsertFailure: true });
+  const response = await request(resetBody);
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.success, true);
+  assert.match(body.warning, /audit entry/i);
+  assert.ok(calls.some((call) => call[0] === "updateUser"));
+});
+
+test("a member with a real email is told their password was reset", async () => {
+  const { request, calls } = setup({
+    profile: { email: "jane@example.com", full_name: "Jane Doe", phone_number: "0712345678" },
+    authUser: { email: "jane@example.com" },
+  });
+  const response = await request(resetBody);
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).warning, undefined);
+
+  const sent = calls.find((call) => call[0] === "email");
+  assert.match(sent[1], /\/functions\/v1\/send-email$/);
+  assert.equal(sent[2].to, "jane@example.com");
+  assert.equal(sent[2].subject, "Your Murage Foundation password has been reset");
+  assert.equal(sent[2].template, "admin_password_reset");
+  assert.equal(sent[2].data.memberName, "Jane Doe");
+  assert.equal(sent[2].data.defaultPassword, DEFAULT_PASSWORD);
+  assert.equal(sent[2].data.login, "jane@example.com");
+  assert.equal(sent[2].data.phoneNumber, "0712345678");
+  assert.equal(sent[2].data.paybillNumber, "522522");
+  assert.equal(sent[2].data.paybillAccount, "7989164");
+  assert.equal(sent[2].data.supportPhone, "+254182528510");
+  // The email goes out only after the reset and the audit entry have been written.
+  assert.ok(calls.findIndex((call) => call[0] === "updateUser") < calls.indexOf(sent));
+});
+
+test("phone-only members are never emailed, not even at their synthetic address", async () => {
+  const { request, calls } = setup();
+  assert.equal((await request(resetBody)).status, 200);
+  assert.equal(
+    calls.some((call) => call[0] === "email"),
+    false,
+  );
+});
+
+test("a synthetic address stored on the profile counts as no email at all", async () => {
+  const { request, calls } = setup({
+    profile: { email: "254712345678@murage.foundation" },
+    authUser: { email: "254712345678@murage.foundation" },
+  });
+  assert.equal((await request(resetBody)).status, 200);
+  assert.equal(
+    calls.some((call) => call[0] === "email"),
+    false,
+  );
+});
+
+test("an undeliverable reset email still succeeds and warns the admin", async () => {
+  const { request } = setup({
+    emailFailure: true,
+    profile: { email: "jane@example.com", full_name: "Jane Doe" },
+    authUser: { email: "jane@example.com" },
+  });
+  const response = await request(resetBody);
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.success, true);
+  assert.match(body.warning, /did not send/);
+  assert.match(body.warning, /12345678/);
+});
+
+test("a legacy phone-backed Auth user gains a synthetic email so the reset is usable", async () => {
+  const { request, calls } = setup({
+    profile: { email: null, phone_number: "0700000000" },
+    authUser: { email: null, phone: "254700000000" },
+  });
+  assert.equal((await request(resetBody)).status, 200);
+  const update = calls.find((call) => call[0] === "updateUser");
+  assert.equal(update[2].password, DEFAULT_PASSWORD);
+  assert.equal(update[2].email, "254700000000@murage.foundation");
+  assert.equal(update[2].email_confirm, true);
+  // The synthetic address stays out of the profile row.
+  const profileWrite = calls.find((call) => call[0] === "update" && call[1] === "profiles");
+  assert.equal(profileWrite[2].email, undefined);
+  assert.equal(profileWrite[2].is_default_password, true);
+  const audit = calls.find((call) => call[0] === "insert" && call[1] === "audit_logs");
+  assert.equal(audit[2].new_values.synthetic_email_provisioned, true);
+});
+
+test("a missing member or Auth user is reported without any write", async () => {
+  const noProfile = setup({ profileMissing: true });
+  assert.equal((await noProfile.request(resetBody)).status, 404);
+  assert.equal(
+    noProfile.calls.some((call) => call[0] === "updateUser"),
+    false,
+  );
+
+  const noAuthUser = setup({ authUserMissing: true });
+  assert.equal((await noAuthUser.request(resetBody)).status, 404);
+  assert.equal(
+    noAuthUser.calls.some((call) => call[0] === "updateUser"),
+    false,
+  );
+});
+
+test("a rejected password update reports the Auth error and writes no flag or audit row", async () => {
+  const { request, calls } = setup({ passwordUpdateFailure: true });
+  const response = await request(resetBody);
+  assert.equal(response.status, 409);
+  assert.match((await response.json()).error, /password/);
+  assert.equal(
+    calls.some((call) => call[0] === "update" && call[1] === "profiles"),
+    false,
+  );
+  assert.equal(
+    calls.some((call) => call[0] === "insert" && call[1] === "audit_logs"),
+    false,
+  );
+});

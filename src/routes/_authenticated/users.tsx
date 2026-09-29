@@ -20,6 +20,16 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -43,10 +53,12 @@ import {
   Mail,
   UserCircle,
   UserPlus,
+  KeyRound,
 } from "lucide-react";
 import { toast } from "sonner";
 import { UnauthorizedCard } from "@/components/shared/UnauthorizedCard";
 import { useRoles } from "@/hooks/use-roles";
+import { DEFAULT_MEMBER_PASSWORD } from "@/lib/phoneUtils";
 import { useState } from "react";
 import type { Database } from "@/integrations/supabase/types";
 import { KdpaUserTools } from "@/components/users/KdpaUserTools";
@@ -76,6 +88,14 @@ interface PendingRegistration {
   registration_channel: string;
   status: string;
   created_at: string;
+}
+
+/** Member an administrator is about to reset, as named in the confirmation dialog. */
+interface ResetTarget {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+  phone_number: string | null;
 }
 
 // ── Role Label Helper ─────────────────────────────
@@ -108,6 +128,7 @@ function Page() {
   const qc = useQueryClient();
   const [rejectTarget, setRejectTarget] = useState<PendingRegistration | null>(null);
   const [rejectReason, setRejectReason] = useState("");
+  const [resetTarget, setResetTarget] = useState<ResetTarget | null>(null);
 
   // ── Web App Users Query ───────────────────────
   const { data: profiles = [], isLoading } = useQuery({
@@ -206,7 +227,9 @@ function Page() {
     },
     onSuccess: (_, vars) => {
       toast.success(
-        `${vars.fullName} added successfully! They can use the WhatsApp/SMS bot once it goes live.`,
+        `${vars.fullName} added successfully! They sign in with ${
+          vars.email ?? vars.phoneNumber
+        } and the default password ${DEFAULT_MEMBER_PASSWORD}.`,
       );
       setAddMemberOpen(false);
       setAddFullName("");
@@ -271,6 +294,24 @@ function Page() {
     },
     onSuccess: () => {
       toast.success("Role removed");
+      invalidateAll();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  /**
+   * Put a member back on the default password (12345678). The Edge Function re-arms
+   * `profiles.is_default_password` so the member is prompted to change it at next sign-in, writes
+   * the append-only audit entry, and emails the member when they have a real mailbox.
+   */
+  const resetPassword = useMutation({
+    mutationFn: (target: ResetTarget) =>
+      adminAction({ action: "resetMemberPassword", userId: target.id }),
+    onSuccess: (result, target) => {
+      const name = target.full_name ?? target.phone_number ?? target.email ?? "Member";
+      toast.success(`${name}'s password has been reset to ${DEFAULT_MEMBER_PASSWORD}`);
+      if (result.warning) toast.warning(result.warning);
+      setResetTarget(null);
       invalidateAll();
     },
     onError: (e: Error) => toast.error(e.message),
@@ -370,7 +411,7 @@ function Page() {
                   <TableHead>Roles</TableHead>
                   <TableHead>KDPA Consent & Retention</TableHead>
                   <TableHead className="w-56">Grant Role</TableHead>
-                  <TableHead className="w-12 text-right">Data Tools</TableHead>
+                  <TableHead className="w-24 text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -400,8 +441,19 @@ function Page() {
                                 Anonymized
                               </Badge>
                             )}
+                            {u.is_default_password && (
+                              <Badge
+                                variant="secondary"
+                                className="gap-1 bg-amber-100 text-[10px] py-0 px-1 text-amber-800"
+                              >
+                                <KeyRound className="h-3 w-3" />
+                                Default password
+                              </Badge>
+                            )}
                           </div>
-                          <div className="text-xs text-muted-foreground">{u.email}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {u.email ?? "Signs in with phone number"}
+                          </div>
                           {u.phone_number && (
                             <div className="text-xs text-muted-foreground flex items-center gap-1">
                               <Phone className="h-3 w-3" />
@@ -476,7 +528,35 @@ function Page() {
                           </div>
                         </TableCell>
                         <TableCell className="text-right">
-                          <KdpaUserTools userProfile={u} />
+                          <div className="flex items-center justify-end gap-1">
+                            {r.isAdmin && (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-8 w-8 text-amber-600 hover:bg-amber-50 hover:text-amber-700"
+                                      aria-label={`Reset ${u.full_name ?? "member"}'s password to the default`}
+                                      disabled={resetPassword.isPending}
+                                      onClick={() =>
+                                        setResetTarget({
+                                          id: u.id,
+                                          full_name: u.full_name,
+                                          email: u.email,
+                                          phone_number: u.phone_number,
+                                        })
+                                      }
+                                    >
+                                      <KeyRound className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Reset password to default</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
+                            <KdpaUserTools userProfile={u} />
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
@@ -707,6 +787,38 @@ function Page() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* ── Reset Password Dialog ───────────────────── */}
+      <AlertDialog open={!!resetTarget} onOpenChange={(open) => !open && setResetTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset Password</AlertDialogTitle>
+            <AlertDialogDescription>
+              Reset{" "}
+              <span className="font-medium text-foreground">
+                {resetTarget?.full_name ??
+                  resetTarget?.phone_number ??
+                  resetTarget?.email ??
+                  "this member"}
+              </span>
+              's password to the default password ({DEFAULT_MEMBER_PASSWORD})? They will be prompted
+              to change it on next login.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={resetPassword.isPending}>Cancel</AlertDialogCancel>
+            <Button
+              variant="destructive"
+              disabled={resetPassword.isPending}
+              onClick={() => {
+                if (resetTarget) resetPassword.mutate(resetTarget);
+              }}
+            >
+              {resetPassword.isPending ? "Resetting…" : "Reset Password"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* ── Add Member Dialog ──────────────────────── */}
       <Dialog open={addMemberOpen} onOpenChange={setAddMemberOpen}>
         <DialogContent className="sm:max-w-[480px]">
@@ -736,7 +848,7 @@ function Page() {
                   required
                 />
                 <p className="text-[11px] text-muted-foreground">
-                  e.g. 0712345678 · Used for WhatsApp/SMS bot
+                  e.g. 0712345678 · WhatsApp/SMS bot · their sign-in ID if they have no email
                 </p>
               </div>
 
@@ -750,7 +862,8 @@ function Page() {
                   onChange={(e) => setAddEmail(e.target.value)}
                 />
                 <p className="text-[11px] text-muted-foreground">
-                  Leave blank if member has no email
+                  Leave blank if the member has no email — they sign in with their phone number
+                  instead
                 </p>
               </div>
 
@@ -768,6 +881,12 @@ function Page() {
                   </SelectContent>
                 </Select>
               </div>
+
+              <p className="rounded-md border border-border bg-muted/40 p-2 text-[11px] text-muted-foreground">
+                The member is issued the default password{" "}
+                <span className="font-mono">{DEFAULT_MEMBER_PASSWORD}</span> and is prompted to
+                change it after signing in.
+              </p>
             </div>
             <DialogFooter>
               <Button
