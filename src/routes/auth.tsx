@@ -10,6 +10,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { AlertCircle, Leaf } from "lucide-react";
+import {
+  DEFAULT_MEMBER_PASSWORD,
+  isEmailAddress,
+  isPhoneNumber,
+  resolveSignInEmail,
+} from "@/lib/phoneUtils";
 
 export const Route = createFileRoute("/auth")({
   component: AuthPage,
@@ -23,8 +29,8 @@ function AuthPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
-  // Sign in
-  const [email, setEmail] = useState("");
+  // Sign in: one field accepts either an email address or a phone number.
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   // Sign up
   const [fullName, setFullName] = useState("");
@@ -61,9 +67,25 @@ function AuthPage() {
   const signIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError(null);
+    const typed = identifier.trim();
+    if (!typed) {
+      setAuthError("Enter your email address or phone number.");
+      return;
+    }
+    if (!isEmailAddress(typed) && !isPhoneNumber(typed)) {
+      setAuthError("Enter a valid email address or phone number, e.g. 0712345678.");
+      return;
+    }
+    // Members without an email address live in Supabase Auth under a synthetic email
+    // built from their phone number, so one password sign-in path serves everyone.
+    const signedInWithPhone = !isEmailAddress(typed);
+    const signInEmail = resolveSignInEmail(typed);
     setLoading(true);
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: signInEmail,
+        password,
+      });
       if (error) throw error;
       // A missing/unreadable profile is treated as pending: that page keeps polling and
       // forwards the member to /dashboard the moment an admin approves them.
@@ -83,11 +105,18 @@ function AuthPage() {
       console.error("Sign in failed", error);
       const message = error instanceof Error ? error.message : "";
       // Email verification is disabled; a legacy unconfirmed account needs an admin.
-      setAuthError(
-        /email not confirmed/i.test(message)
-          ? `Please contact admin on ${ADMIN_CONTACT} to activate your account`
-          : message || "Unable to sign in. Please retry.",
-      );
+      if (/email not confirmed/i.test(message)) {
+        setAuthError(`Please contact admin on ${ADMIN_CONTACT} to activate your account`);
+        return;
+      }
+      if (signedInWithPhone && /invalid login credentials/i.test(message)) {
+        setAuthError(
+          `No account matches ${typed}. Sign in with the phone number the foundation has on ` +
+            `record and the password ${DEFAULT_MEMBER_PASSWORD} (or your own, if you changed it).`,
+        );
+        return;
+      }
+      setAuthError(message || "Unable to sign in. Please retry.");
     } finally {
       setLoading(false);
     }
@@ -176,15 +205,20 @@ function AuthPage() {
             <TabsContent value="signin" className="mt-4">
               <form onSubmit={signIn} className="space-y-4">
                 <div className="space-y-1.5">
-                  <Label htmlFor="signin-email">Email</Label>
+                  <Label htmlFor="signin-identifier">Email or Phone Number</Label>
                   <Input
-                    id="signin-email"
-                    type="email"
+                    id="signin-identifier"
+                    type="text"
                     required
-                    autoComplete="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    autoComplete="username"
+                    placeholder="email@example.com or 0712345678"
+                    value={identifier}
+                    onChange={(e) => setIdentifier(e.target.value)}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    No email address? Sign in with the phone number the foundation has on record,
+                    e.g. 0712345678 or +254712345678.
+                  </p>
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="signin-password">Password</Label>
@@ -201,8 +235,10 @@ function AuthPage() {
                   {loading ? "Signing in..." : "Sign in"}
                 </Button>
                 <p className="text-xs text-muted-foreground">
-                  Approved members sign in with their email and password. No email verification is
-                  required.
+                  Approved members sign in with their email address or phone number and password. No
+                  email or SMS verification is required. Newly imported members start on the default
+                  password <span className="font-mono">{DEFAULT_MEMBER_PASSWORD}</span> and are
+                  asked to change it after signing in.
                 </p>
               </form>
             </TabsContent>
