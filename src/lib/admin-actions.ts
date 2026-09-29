@@ -12,7 +12,9 @@ type AdminAction =
       phoneNumber: string;
       email: string | null;
       role: string;
-    };
+    }
+  /** Reset a member's password to the default (12345678) and re-arm the change-password prompt. */
+  | { action: "resetMemberPassword"; userId: string };
 
 export async function adminAction(
   body: AdminAction,

@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/table";
 import { ContributionImportPanel } from "@/components/contributions/ContributionImportPanel";
 import { adminAction } from "@/lib/admin-actions";
+import { DEFAULT_MEMBER_PASSWORD } from "@/lib/phoneUtils";
 import { UnauthorizedCard } from "@/components/shared/UnauthorizedCard";
 import { useRoles } from "@/hooks/use-roles";
 import { CheckCircle2, Download, FileSpreadsheet, Upload } from "lucide-react";
@@ -223,7 +224,9 @@ function MembersImport({ members }: { members: MemberOption[] }) {
     setResult({ imported, skipped, failed });
     setImporting(false);
     if (imported > 0) {
-      toast.success(`Imported ${imported} member${imported === 1 ? "" : "s"}.`);
+      toast.success(
+        `Imported ${imported} member${imported === 1 ? "" : "s"} with the default password ${DEFAULT_MEMBER_PASSWORD}. They sign in with their email or phone number.`,
+      );
       qc.invalidateQueries({ queryKey: ["import-member-options"] });
       qc.invalidateQueries({ queryKey: ["users"] });
       qc.invalidateQueries({ queryKey: ["profiles"] });
@@ -282,6 +285,19 @@ function MembersImport({ members }: { members: MemberOption[] }) {
         not already belong to a member.
       </p>
 
+      <div className="rounded-md border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
+        <p className="font-medium text-foreground">How imported members sign in</p>
+        <p className="mt-1">
+          Everyone is issued the default password{" "}
+          <span className="font-mono">{DEFAULT_MEMBER_PASSWORD}</span> and is asked to change it
+          after signing in. Members with an email address use that email; members without one use
+          their phone number (e.g. <span className="font-mono">0723456789</span> or{" "}
+          <span className="font-mono">+254723456789</span>). No SMS code is sent — a synthetic
+          sign-in address is created for phone-only members behind the scenes and is never shown to
+          them or stored on their profile.
+        </p>
+      </div>
+
       {rows.length > 0 && (
         <>
           <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -301,7 +317,7 @@ function MembersImport({ members }: { members: MemberOption[] }) {
                   <TableHead className="w-12">Line</TableHead>
                   <TableHead>Full name</TableHead>
                   <TableHead>Phone</TableHead>
-                  <TableHead>Email</TableHead>
+                  <TableHead>Email / Sign-in</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
@@ -312,7 +328,13 @@ function MembersImport({ members }: { members: MemberOption[] }) {
                     <TableCell className="text-xs text-muted-foreground">{row.line}</TableCell>
                     <TableCell className="text-sm">{row.full_name || "—"}</TableCell>
                     <TableCell className="text-xs">{row.phone_number}</TableCell>
-                    <TableCell className="text-xs">{row.email || "—"}</TableCell>
+                    <TableCell className="text-xs">
+                      {row.email || (
+                        <span className="text-muted-foreground">
+                          phone login · <span className="font-mono">{row.phone_number}</span>
+                        </span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-xs capitalize">
                       {row.role.replace(/_/g, " ")}
                     </TableCell>

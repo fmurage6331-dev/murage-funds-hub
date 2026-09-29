@@ -546,6 +546,7 @@ export type Database = {
           full_name: string | null;
           id: string;
           is_anonymized: boolean;
+          is_default_password: boolean;
           phone_number: string | null;
           phone_only_member: boolean | null;
           prefers_sms: boolean | null;
@@ -567,6 +568,7 @@ export type Database = {
           full_name?: string | null;
           id: string;
           is_anonymized?: boolean;
+          is_default_password?: boolean;
           phone_number?: string | null;
           phone_only_member?: boolean | null;
           prefers_sms?: boolean | null;
@@ -588,6 +590,7 @@ export type Database = {
           full_name?: string | null;
           id?: string;
           is_anonymized?: boolean;
+          is_default_password?: boolean;
           phone_number?: string | null;
           phone_only_member?: boolean | null;
           prefers_sms?: boolean | null;

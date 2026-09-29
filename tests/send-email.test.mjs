@@ -116,3 +116,50 @@ test("missing required fields are rejected before any dispatch", async () => {
   assert.equal(response.status, 400);
   assert.equal(sent.length, 0);
 });
+
+const adminPasswordReset = (data) => ({
+  to: "jane@example.com",
+  subject: "Your Murage Foundation password has been reset",
+  template: "admin_password_reset",
+  data,
+});
+
+test("admin_password_reset states the default password, login and paybill details", async () => {
+  const { request, sent } = setup();
+  const response = await request(
+    adminPasswordReset({
+      memberName: "Jane Doe",
+      defaultPassword: "12345678",
+      login: "jane@example.com",
+      phoneNumber: "0712345678",
+      paybillNumber: "522522",
+      paybillAccount: "7989164",
+      supportPhone: "+254182528510",
+    }),
+  );
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).success, true);
+  assert.deepEqual(sent[0].body.to, ["jane@example.com"]);
+  assert.equal(sent[0].body.subject, "Your Murage Foundation password has been reset");
+  const { html } = sent[0].body;
+  assert.ok(html.includes("password has been reset"), "the member is told what happened");
+  assert.ok(html.includes("12345678"), "the default password is stated");
+  assert.ok(html.includes("change your password immediately"), "they are told to change it");
+  assert.ok(html.includes("jane@example.com"), "the login identifier is shown");
+  assert.ok(html.includes("0712345678"), "the phone on record is shown");
+  assert.ok(html.includes("522522") && html.includes("7989164"), "paybill details are included");
+  assert.ok(html.includes("+254182528510"), "the support line is included");
+});
+
+test("admin_password_reset falls back to sensible defaults and escapes member data", async () => {
+  const { request, sent } = setup();
+  await request(
+    adminPasswordReset({ memberName: '<script>alert("xss")</script> & Co', login: "0712345678" }),
+  );
+  const { html } = sent[0].body;
+  assert.ok(!html.includes("<script>"), "raw markup must not reach the email body");
+  assert.ok(html.includes("&lt;script&gt;"), "the name is escaped instead");
+  assert.ok(html.includes("12345678"), "the default password is assumed when omitted");
+  assert.ok(html.includes("522522") && html.includes("7989164"));
+  assert.ok(html.includes("+254182528510"));
+});

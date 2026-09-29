@@ -19,9 +19,7 @@ export function AppFooter() {
           </p>
         </div>
         <div className="text-center md:text-right">
-          <p className="text-xs text-gray-500">
-            Developed by Francis Murage Muhoro
-          </p>
+          <p className="text-xs text-gray-500">Developed by Francis Murage Muhoro</p>
         </div>
       </div>
     </footer>

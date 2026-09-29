@@ -21,7 +21,8 @@ interface EmailNotificationPayload {
     | "loan_payment_submitted"
     | "loan_payment_confirmed"
     | "loan_payment_rejected"
-    | "password_reset";
+    | "password_reset"
+    | "admin_password_reset";
   data: Record<string, unknown>;
 }
 
@@ -219,6 +220,35 @@ function generateHtmlEmail(template: string, data: Record<string, unknown>): str
           }
         </div>
         <p style="font-size: 13px; color: #6b7280;">This link expires shortly after it is issued. If it no longer works, ask the administrator on ${adminContact} to send a new one.</p>
+      `;
+      break;
+    }
+
+    case "admin_password_reset": {
+      // Sent only to members with a real mailbox: phone-only members have a synthetic
+      // @murage.foundation address that is never emailed (they are told in person / by SMS).
+      const memberName = escapeHtml(data.memberName);
+      const defaultPassword = escapeHtml(data.defaultPassword || "12345678");
+      const login = escapeHtml(data.login);
+      const phoneNumber = escapeHtml(data.phoneNumber);
+      const paybillNumber = escapeHtml(data.paybillNumber || "522522");
+      const paybillAccount = escapeHtml(data.paybillAccount || "7989164");
+      const supportPhone = escapeHtml(data.supportPhone || "+254182528510");
+
+      contentHtml = `
+        <h2 style="color: ${brandColor}; margin-top: 0;">Your Murage Foundation password has been reset</h2>
+        <p>Dear ${memberName || "Member"},</p>
+        <p>Your password has been reset to <strong>${defaultPassword}</strong> by the administrator. Please log in and change your password immediately from <strong>My Account &rarr; Account Security</strong>.</p>
+        <div style="background-color: #fffbeb; border-left: 4px solid #d97706; padding: 16px; margin: 20px 0; border-radius: 4px;">
+          <p style="margin: 0 0 8px 0;"><strong>Login:</strong> ${login || phoneNumber || "your registered phone number"}</p>
+          <p style="margin: 0;"><strong>Password:</strong> <span style="font-family: monospace; font-size: 16px; letter-spacing: 2px;">${defaultPassword}</span></p>
+        </div>
+        ${
+          phoneNumber
+            ? `<p style="font-size: 13px; color: #6b7280;">Phone on record: ${phoneNumber}. You can also sign in with this phone number instead of your email address.</p>`
+            : ""
+        }
+        <p style="font-size: 13px; color: #6b7280;">M-Pesa Paybill <strong>${paybillNumber}</strong> &nbsp;|&nbsp; Account <strong>${paybillAccount}</strong><br/>Support: ${supportPhone}</p>
       `;
       break;
     }

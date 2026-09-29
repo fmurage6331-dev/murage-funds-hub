@@ -47,6 +47,8 @@ import {
 import { useRoles } from "@/hooks/use-roles";
 import { buildNavigation, type NavIcon } from "@/lib/rbac";
 import { AppFooter } from "@/components/AppFooter";
+import { DefaultPasswordBanner } from "@/components/DefaultPasswordBanner";
+import { isSyntheticEmail, phoneFromMetadata } from "@/lib/phoneUtils";
 
 /** Sidebar icons keyed by the identifiers returned by `buildNavigation`. */
 const NAV_ICONS = {
@@ -112,6 +114,12 @@ function AuthedLayout() {
   const isActiveItem = (url: string) => path === url || path.startsWith(`${url}/`);
   const activeTitle = allItems.find((i) => isActiveItem(i.url))?.title ?? "Overview";
 
+  // Phone-only members sign in through a synthetic @murage.foundation address that is never meant
+  // to be seen: label their session with the phone number carried on their Auth metadata instead.
+  const accountLabel = isSyntheticEmail(user.email)
+    ? (phoneFromMetadata(user.user_metadata) ?? "Phone number sign-in")
+    : (user.email ?? "Member account");
+
   return (
     <SidebarProvider>
       <div className="flex min-h-screen w-full">
@@ -164,7 +172,7 @@ function AuthedLayout() {
 
           <SidebarFooter className="border-t border-sidebar-border">
             <div className="px-2 py-2 group-data-[collapsible=icon]:hidden">
-              <div className="truncate text-xs text-sidebar-foreground/80">{user.email}</div>
+              <div className="truncate text-xs text-sidebar-foreground/80">{accountLabel}</div>
               <div className="mt-0.5 text-[10px] uppercase tracking-wider text-gold">
                 {r.roles.length ? r.roles.join(" · ").replace(/_/g, " ") : "Member"}
               </div>
@@ -192,6 +200,7 @@ function AuthedLayout() {
               <p role="alert">Unable to verify membership. Please retry.</p>
             ) : profile?.status === "approved" ? (
               <>
+                <DefaultPasswordBanner userId={user.id} />
                 <Outlet />
                 <AppFooter />
               </>

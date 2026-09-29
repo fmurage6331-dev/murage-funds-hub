@@ -1,6 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useRouterState } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   Download,
@@ -20,6 +20,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useRoles } from "@/hooks/use-roles";
 import { downloadCsv } from "@/lib/csv-import";
+import { defaultPasswordFlagKey, defaultPasswordFlagOptions } from "@/lib/profile-status";
+import { DEFAULT_MEMBER_PASSWORD, isSyntheticEmail, phoneFromMetadata } from "@/lib/phoneUtils";
 import {
   ALL_STATEMENT_SECTIONS,
   buildMemberStatementCsv,
@@ -38,6 +40,12 @@ export const Route = createFileRoute("/_authenticated/my-account")({
 });
 
 const PHONE_PATTERN = /^[+\d][\d\s-]{6,19}$/;
+
+/** Same rule as /auth sign-up, so a member can never set a password they could not register with. */
+const MIN_PASSWORD_LENGTH = 8;
+
+/** Administrator support line, quoted when a member cannot self-serve. */
+const ADMIN_CONTACT = "+254182528510";
 
 function formatDate(value: string | null | undefined) {
   if (!value) return "—";
@@ -59,6 +67,11 @@ function MyAccountPage() {
   const [newPhone, setNewPhone] = useState("");
   const [resetSentTo, setResetSentTo] = useState<string | null>(null);
   const [statementBusy, setStatementBusy] = useState<"pdf" | "csv" | null>(null);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const currentPasswordRef = useRef<HTMLInputElement>(null);
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ["my-account-profile", user.id],
@@ -78,6 +91,17 @@ function MyAccountPage() {
       }
     },
   });
+
+  /** Drives the "still on the default password" wording here and the banner on every page. */
+  const { data: isDefaultPassword } = useQuery(defaultPasswordFlagOptions(user.id));
+
+  // The default-password banner links to /my-account#change-password.
+  const hash = useRouterState({ select: (state) => state.location.hash });
+  useEffect(() => {
+    if (hash.replace(/^#/, "") !== "change-password") return;
+    document.getElementById("change-password")?.scrollIntoView({ behavior: "smooth" });
+    currentPasswordRef.current?.focus({ preventScroll: true });
+  }, [hash]);
 
   const updatePhone = useMutation({
     mutationFn: async (phone: string) => {
@@ -107,6 +131,52 @@ function MyAccountPage() {
       toast.success(`Password reset email sent to ${email}`);
     },
     onError: (error: Error) => toast.error(error.message),
+  });
+
+  /**
+   * Change the password in place — the only path phone-only members have, since a recovery link
+   * would go to an address they never see. Supabase's `updateUser` only proves the session is
+   * valid, so the current password is re-checked first: a browser left signed in must not let
+   * someone lock the member out of their own account.
+   */
+  const changePassword = useMutation({
+    mutationFn: async ({ current, next }: { current: string; next: string }) => {
+      const authEmail = user.email;
+      if (!authEmail)
+        throw new Error(
+          `This account cannot change its password here. Contact admin on ${ADMIN_CONTACT}.`,
+        );
+      const { error: verifyError } = await supabase.auth.signInWithPassword({
+        email: authEmail,
+        password: current,
+      });
+      if (verifyError) throw new Error("Your current password is incorrect.");
+
+      const { error: updateError } = await supabase.auth.updateUser({ password: next });
+      if (updateError)
+        throw new Error(updateError.message || "Unable to change your password. Please retry.");
+
+      // Only a real password change clears profiles.is_default_password (and the banner).
+      const { error: flagError } = await supabase
+        .from("profiles")
+        .update({ is_default_password: false })
+        .eq("id", user.id);
+      if (flagError) throw new Error(flagError.message);
+    },
+    onSuccess: () => {
+      toast.success("Password changed. Keep your new password somewhere safe.");
+      setPasswordError(null);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      // Drops the warning banner on this and every other authenticated page immediately.
+      void qc.invalidateQueries({ queryKey: defaultPasswordFlagKey(user.id) });
+      void qc.invalidateQueries({ queryKey: ["my-account-profile", user.id] });
+    },
+    onError: (error: Error) => {
+      setPasswordError(error.message);
+      toast.error(error.message);
+    },
   });
 
   /** Shared cache key for the member's own statement data. */
@@ -157,7 +227,11 @@ function MyAccountPage() {
     }
   };
 
-  const accountEmail = profile?.email ?? user.email ?? "";
+  // A synthetic @murage.foundation address is an internal Auth identifier: never show it, and
+  // never offer a recovery link to it (the member has no mailbox behind it).
+  const hasRealEmail = !isSyntheticEmail(profile?.email ?? user.email);
+  const accountEmail = hasRealEmail ? (profile?.email ?? user.email ?? "") : "";
+  const signInPhone = profile?.phone_number ?? phoneFromMetadata(user.user_metadata) ?? "";
   const currentPhone = profile?.phone_number ?? "";
   const trimmedPhone = newPhone.trim();
   const phoneInvalid = trimmedPhone.length > 0 && !PHONE_PATTERN.test(trimmedPhone);
@@ -173,6 +247,34 @@ function MyAccountPage() {
       return;
     }
     updatePhone.mutate(trimmedPhone);
+  };
+
+  const handlePasswordSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    setPasswordError(null);
+    if (!currentPassword) {
+      setPasswordError("Enter your current password.");
+      return;
+    }
+    if (newPassword.length < MIN_PASSWORD_LENGTH) {
+      setPasswordError(
+        `Your new password must be at least ${MIN_PASSWORD_LENGTH} characters long.`,
+      );
+      return;
+    }
+    if (newPassword === DEFAULT_MEMBER_PASSWORD) {
+      setPasswordError(`Choose a password other than the default ${DEFAULT_MEMBER_PASSWORD}.`);
+      return;
+    }
+    if (newPassword === currentPassword) {
+      setPasswordError("Your new password must be different from your current one.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError("The two new passwords do not match.");
+      return;
+    }
+    changePassword.mutate({ current: currentPassword, next: newPassword });
   };
 
   return (
@@ -208,9 +310,27 @@ function MyAccountPage() {
                 <dt className="text-xs uppercase tracking-wider text-muted-foreground">Email</dt>
                 <dd className="mt-1 flex items-center gap-2 font-medium">
                   <Mail className="h-3.5 w-3.5 text-muted-foreground" />
-                  {accountEmail || "—"}
+                  {accountEmail || (
+                    <span className="font-normal text-muted-foreground">
+                      Not on record — you sign in with your phone number
+                    </span>
+                  )}
                 </dd>
               </div>
+
+              {!accountEmail && (
+                <div>
+                  <dt className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-muted-foreground">
+                    <KeyRound className="h-3.5 w-3.5" /> Sign-in
+                  </dt>
+                  <dd className="mt-1 font-medium">
+                    {signInPhone || "Your phone number"}
+                    <span className="ml-2 text-xs font-normal text-muted-foreground">
+                      + your password
+                    </span>
+                  </dd>
+                </div>
+              )}
 
               <div>
                 <dt className="text-xs uppercase tracking-wider text-muted-foreground">
@@ -321,27 +441,109 @@ function MyAccountPage() {
       </Card>
 
       {/* ── Section 3 · Account security ────────────────────────────── */}
-      <Card>
+      <Card id="change-password" className="scroll-mt-20">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 font-serif">
             <KeyRound className="h-5 w-5 text-primary" /> Account Security
           </CardTitle>
           <CardDescription>
-            We&apos;ll email {accountEmail || "your registered address"} a secure link to choose a
-            new password.
+            {isDefaultPassword ? (
+              <>
+                You are still using the default password (
+                <span className="font-mono">{DEFAULT_MEMBER_PASSWORD}</span>). Choose a new one
+                below — it only has to be done once.
+              </>
+            ) : (
+              "Change your password whenever you like. You will need your current password first."
+            )}
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <Button
-            variant="outline"
-            disabled={sendPasswordReset.isPending || !accountEmail}
-            onClick={() => sendPasswordReset.mutate(accountEmail)}
-          >
-            {sendPasswordReset.isPending ? "Sending…" : "Change Password"}
-          </Button>
-          {resetSentTo && (
-            <p role="status" className="text-sm text-success">
-              Password reset email sent to {resetSentTo}
+        <CardContent className="space-y-4">
+          <form onSubmit={handlePasswordSubmit} className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="current-password">Current password</Label>
+              <Input
+                id="current-password"
+                ref={currentPasswordRef}
+                type="password"
+                required
+                autoComplete="current-password"
+                placeholder={isDefaultPassword ? DEFAULT_MEMBER_PASSWORD : undefined}
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+              />
+              {isDefaultPassword && (
+                <p className="text-xs text-muted-foreground">
+                  Imported members start on{" "}
+                  <span className="font-mono">{DEFAULT_MEMBER_PASSWORD}</span>.
+                </p>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="new-password">New password</Label>
+              <Input
+                id="new-password"
+                type="password"
+                required
+                minLength={MIN_PASSWORD_LENGTH}
+                autoComplete="new-password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Minimum {MIN_PASSWORD_LENGTH} characters, and not the default password.
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="confirm-new-password">Confirm new password</Label>
+              <Input
+                id="confirm-new-password"
+                type="password"
+                required
+                minLength={MIN_PASSWORD_LENGTH}
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+              />
+            </div>
+            {passwordError && (
+              <p role="alert" className="text-xs text-destructive">
+                {passwordError}
+              </p>
+            )}
+            <Button type="submit" disabled={changePassword.isPending}>
+              {changePassword.isPending ? "Changing…" : "Change Password"}
+            </Button>
+          </form>
+
+          {accountEmail ? (
+            <div className="space-y-2 border-t border-border pt-3">
+              <p className="text-xs text-muted-foreground">
+                Forgot your password? We&apos;ll email {accountEmail} a secure link to choose a new
+                one.
+              </p>
+              <Button
+                variant="outline"
+                disabled={sendPasswordReset.isPending}
+                onClick={() => sendPasswordReset.mutate(accountEmail)}
+              >
+                {sendPasswordReset.isPending ? "Sending…" : "Email Me a Reset Link"}
+              </Button>
+              {resetSentTo && (
+                <p role="status" className="text-sm text-success">
+                  Password reset email sent to {resetSentTo}
+                </p>
+              )}
+            </div>
+          ) : (
+            <p className="border-t border-border pt-3 text-xs text-muted-foreground">
+              Forgotten your password? There is no email address on this account, so ask an
+              administrator to reset it: you will then sign in with{" "}
+              <span className="font-medium text-foreground">
+                {signInPhone || "your phone number"}
+              </span>{" "}
+              and the default password <span className="font-mono">{DEFAULT_MEMBER_PASSWORD}</span>,
+              and change it here. Support: {ADMIN_CONTACT}.
             </p>
           )}
         </CardContent>
@@ -389,9 +591,7 @@ function MyAccountPage() {
           <CardTitle className="flex items-center gap-2 font-serif">
             <Info className="h-5 w-5 text-primary" /> About This App
           </CardTitle>
-          <CardDescription>
-            Version, developer credit, and platform details.
-          </CardDescription>
+          <CardDescription>Version, developer credit, and platform details.</CardDescription>
         </CardHeader>
         <CardContent>
           <dl className="space-y-3 text-sm">
@@ -409,7 +609,9 @@ function MyAccountPage() {
             </div>
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Copyright</dt>
-              <dd className="font-medium text-right">© {new Date().getFullYear()} Murage Foundation. All rights reserved.</dd>
+              <dd className="font-medium text-right">
+                © {new Date().getFullYear()} Murage Foundation. All rights reserved.
+              </dd>
             </div>
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Platform</dt>

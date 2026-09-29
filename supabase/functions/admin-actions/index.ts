@@ -1,5 +1,10 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import type { Database } from "../../../src/integrations/supabase/types.ts";
+import {
+  DEFAULT_MEMBER_PASSWORD,
+  isSyntheticEmail,
+  phoneToSyntheticEmail,
+} from "../_shared/phone.ts";
 
 type Role = Database["public"]["Enums"]["app_role"];
 type AdminDatabase = Omit<Database, "public"> & {
@@ -31,6 +36,10 @@ const cors = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
+/** M-Pesa details and support line quoted in member notifications. */
+const PAYBILL_NUMBER = "522522";
+const PAYBILL_ACCOUNT = "7989164";
+const SUPPORT_PHONE = "+254182528510";
 const json = (
   body: { success: true; memberId?: string; warning?: string } | { error: string },
   status = 200,
@@ -251,25 +260,18 @@ Deno.serve(async (req: Request) => {
       retentionDate.setFullYear(retentionDate.getFullYear() + 7);
       const dataRetentionUntil = retentionDate.toISOString();
 
-      // profiles.id and user_roles.user_id both reference auth.users, so even a phone-only
-      // manual member needs an Auth identity. Mirror the bot-approval flow: email members get a
-      // confirmed account with an unusable random password, phone-only members get a
-      // phone-backed account (phone left unconfirmed, as the bot flow does).
+      // profiles.id and user_roles.user_id both reference auth.users, so every member needs an
+      // Auth identity. Members sign in with a password — never an SMS code — so a member without
+      // an email address is created under a synthetic email derived from their phone number
+      // (254724344102@murage.foundation) and types that phone number at /auth. Both paths get the
+      // default password, already confirmed because email verification is disabled project-wide.
       const metadata = { full_name: fullName, phone_number: phoneNumber };
-      const created = await db.auth.admin.createUser(
-        email
-          ? {
-              email: email,
-              password: crypto.randomUUID(),
-              email_confirm: true,
-              user_metadata: metadata,
-            }
-          : {
-              phone: phoneNumber,
-              phone_confirm: false,
-              user_metadata: metadata,
-            },
-      );
+      const created = await db.auth.admin.createUser({
+        email: email ?? phoneToSyntheticEmail(phoneNumber),
+        password: DEFAULT_MEMBER_PASSWORD,
+        email_confirm: true,
+        user_metadata: metadata,
+      });
       if (created.error) return json({ error: created.error.message }, 409);
       const memberId = created.data.user.id;
 
@@ -277,9 +279,12 @@ Deno.serve(async (req: Request) => {
         const { error: profileError } = await db.from("profiles").upsert({
           id: memberId,
           full_name: fullName,
+          // The synthetic address is an Auth identifier only: never surface it on the profile.
           email: email,
           phone_number: phoneNumber,
-          phone_only_member: !email,
+          // Phone-only members can use the web app now, so nobody is bot-only any more.
+          phone_only_member: false,
+          is_default_password: true,
           status: "approved",
           consent_given: true,
           whatsapp_opt_in: true,
@@ -303,6 +308,98 @@ Deno.serve(async (req: Request) => {
       }
 
       return json({ success: true, memberId });
+    } else if (body.action === "resetMemberPassword") {
+      if (!uuid(body.userId)) return json({ error: "Valid userId required" }, 400);
+
+      // Never trust client-supplied identity details: re-read the member from the database.
+      const { data: member, error: memberError } = await db
+        .from("profiles")
+        .select("id, full_name, email, phone_number")
+        .eq("id", body.userId)
+        .maybeSingle();
+      if (memberError) throw memberError;
+      if (!member) return json({ error: "Member not found" }, 404);
+
+      const { data: authUser, error: authUserError } = await db.auth.admin.getUserById(body.userId);
+      if (authUserError) return json({ error: authUserError.message }, 404);
+      if (!authUser.user) return json({ error: "Member not found" }, 404);
+
+      // Legacy phone-backed accounts (bot approvals created before phone sign-in existed) have no
+      // email at all, so a new password alone would leave them unable to sign in. Provision the
+      // same synthetic address the import flow uses, derived from the number on record.
+      const loginPhone = authUser.user.phone ?? member.phone_number;
+      const provisionedEmail =
+        !authUser.user.email && loginPhone ? phoneToSyntheticEmail(loginPhone) : null;
+
+      const { error: resetError } = await db.auth.admin.updateUserById(body.userId, {
+        password: DEFAULT_MEMBER_PASSWORD,
+        ...(provisionedEmail ? { email: provisionedEmail, email_confirm: true } : {}),
+      });
+      if (resetError) return json({ error: resetError.message }, 409);
+
+      // Back on the issued password: warn them again at next sign-in, and they can use the web app.
+      const { error: flagError } = await db
+        .from("profiles")
+        .update({ is_default_password: true, phone_only_member: false })
+        .eq("id", body.userId);
+      if (flagError) throw flagError;
+
+      const resetWarnings: string[] = [];
+
+      // Append-only audit trail for every reset. The password value itself is never recorded.
+      const auditRow = {
+        table_name: "auth.users",
+        record_id: body.userId,
+        performed_by: auth.user.id,
+        performed_by_email: auth.user.email ?? null,
+        changed_fields: ["password", "is_default_password"],
+        new_values: {
+          event: "password_reset_by_admin",
+          member_name: member.full_name,
+          is_default_password: true,
+          synthetic_email_provisioned: provisionedEmail !== null,
+        },
+      };
+      // audit_logs.action is CHECK-constrained to INSERT/UPDATE/DELETE in some deployments. Try the
+      // semantic action first, then fall back to a constrained row that still names the event —
+      // the table structure is never modified to make this write fit.
+      const { error: auditError } = await db
+        .from("audit_logs")
+        .insert({ ...auditRow, action: "password_reset_by_admin" });
+      if (auditError) {
+        const fallback = await db.from("audit_logs").insert({ ...auditRow, action: "UPDATE" });
+        if (fallback.error) {
+          console.error("Password reset audit entry failed", fallback.error.message);
+          resetWarnings.push(
+            `The audit entry for this reset could not be written (${fallback.error.message}).`,
+          );
+        }
+      }
+
+      // Only a real mailbox can be told: synthetic addresses are internal and never emailed.
+      const notifyEmail = isSyntheticEmail(member.email) ? null : member.email;
+      if (notifyEmail) {
+        const sent = await dispatchEmail({
+          to: notifyEmail,
+          subject: "Your Murage Foundation password has been reset",
+          template: "admin_password_reset",
+          data: {
+            memberName: member.full_name,
+            defaultPassword: DEFAULT_MEMBER_PASSWORD,
+            login: notifyEmail,
+            phoneNumber: member.phone_number,
+            paybillNumber: PAYBILL_NUMBER,
+            paybillAccount: PAYBILL_ACCOUNT,
+            supportPhone: SUPPORT_PHONE,
+          },
+        });
+        if (!sent)
+          resetWarnings.push(
+            `The notification email to ${notifyEmail} did not send. Tell ` +
+              `${member.full_name ?? "the member"} their password is now ${DEFAULT_MEMBER_PASSWORD}.`,
+          );
+      }
+      if (resetWarnings.length > 0) warning = resetWarnings.join(" ");
     } else {
       return json({ error: "Unknown action" }, 400);
     }
