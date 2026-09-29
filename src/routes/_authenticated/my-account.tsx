@@ -389,9 +389,7 @@ function MyAccountPage() {
           <CardTitle className="flex items-center gap-2 font-serif">
             <Info className="h-5 w-5 text-primary" /> About This App
           </CardTitle>
-          <CardDescription>
-            Version, developer credit, and platform details.
-          </CardDescription>
+          <CardDescription>Version, developer credit, and platform details.</CardDescription>
         </CardHeader>
         <CardContent>
           <dl className="space-y-3 text-sm">
@@ -409,7 +407,9 @@ function MyAccountPage() {
             </div>
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Copyright</dt>
-              <dd className="font-medium text-right">© {new Date().getFullYear()} Murage Foundation. All rights reserved.</dd>
+              <dd className="font-medium text-right">
+                © {new Date().getFullYear()} Murage Foundation. All rights reserved.
+              </dd>
             </div>
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Platform</dt>
