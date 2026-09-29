@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import type { Database } from "../../../src/integrations/supabase/types.ts";
+import { DEFAULT_MEMBER_PASSWORD, phoneToSyntheticEmail } from "../_shared/phone.ts";
 
 type Role = Database["public"]["Enums"]["app_role"];
 type AdminDatabase = Omit<Database, "public"> & {
@@ -251,25 +252,18 @@ Deno.serve(async (req: Request) => {
       retentionDate.setFullYear(retentionDate.getFullYear() + 7);
       const dataRetentionUntil = retentionDate.toISOString();
 
-      // profiles.id and user_roles.user_id both reference auth.users, so even a phone-only
-      // manual member needs an Auth identity. Mirror the bot-approval flow: email members get a
-      // confirmed account with an unusable random password, phone-only members get a
-      // phone-backed account (phone left unconfirmed, as the bot flow does).
+      // profiles.id and user_roles.user_id both reference auth.users, so every member needs an
+      // Auth identity. Members sign in with a password — never an SMS code — so a member without
+      // an email address is created under a synthetic email derived from their phone number
+      // (254724344102@murage.foundation) and types that phone number at /auth. Both paths get the
+      // default password, already confirmed because email verification is disabled project-wide.
       const metadata = { full_name: fullName, phone_number: phoneNumber };
-      const created = await db.auth.admin.createUser(
-        email
-          ? {
-              email: email,
-              password: crypto.randomUUID(),
-              email_confirm: true,
-              user_metadata: metadata,
-            }
-          : {
-              phone: phoneNumber,
-              phone_confirm: false,
-              user_metadata: metadata,
-            },
-      );
+      const created = await db.auth.admin.createUser({
+        email: email ?? phoneToSyntheticEmail(phoneNumber),
+        password: DEFAULT_MEMBER_PASSWORD,
+        email_confirm: true,
+        user_metadata: metadata,
+      });
       if (created.error) return json({ error: created.error.message }, 409);
       const memberId = created.data.user.id;
 
@@ -277,9 +271,12 @@ Deno.serve(async (req: Request) => {
         const { error: profileError } = await db.from("profiles").upsert({
           id: memberId,
           full_name: fullName,
+          // The synthetic address is an Auth identifier only: never surface it on the profile.
           email: email,
           phone_number: phoneNumber,
-          phone_only_member: !email,
+          // Phone-only members can use the web app now, so nobody is bot-only any more.
+          phone_only_member: false,
+          is_default_password: true,
           status: "approved",
           consent_given: true,
           whatsapp_opt_in: true,

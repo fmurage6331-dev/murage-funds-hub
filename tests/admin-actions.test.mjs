@@ -12,6 +12,20 @@ const source = readFileSync(
 const compiled = ts.transpileModule(source.replace(/^import .*createClient.*\n/m, ""), {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
 }).outputText;
+
+/** Load a dependency-free Edge Function module (transpiled to CommonJS) for the vm sandbox. */
+function loadSharedModule(relativePath) {
+  const shared = ts.transpileModule(readFileSync(new URL(relativePath, import.meta.url), "utf8"), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
+  }).outputText;
+  const module = { exports: {} };
+  vm.runInNewContext(shared, { module, exports: module.exports, console: { error() {} } });
+  return module.exports;
+}
+// The handler mints synthetic emails with the same helper the client uses.
+const sharedPhone = loadSharedModule("../supabase/functions/_shared/phone.ts");
+const DEFAULT_PASSWORD = sharedPhone.DEFAULT_MEMBER_PASSWORD;
+
 const RESET_LINK =
   "https://project.supabase.co/auth/v1/verify?token=recovery-token&type=recovery&redirect_to=https%3A%2F%2Fapp";
 function setup(options = {}) {
@@ -26,10 +40,27 @@ function setup(options = {}) {
     requested_role: "member",
     ...options.registration,
   };
+  const profile = {
+    id: "member",
+    full_name: "Jane Doe",
+    email: null,
+    phone_number: "0712345678",
+    ...options.profile,
+  };
+  // By default the Auth user carries the synthetic email the import flow mints for this phone
+  // number, i.e. the common case of an imported phone-only member.
+  const authUser = {
+    id: "member",
+    email: sharedPhone.phoneToSyntheticEmail(profile.phone_number),
+    phone: undefined,
+    ...options.authUser,
+  };
   const db = {
     auth: {
       getUser: async () => ({
-        data: { user: options.invalidToken ? null : { id: "verified-admin" } },
+        data: {
+          user: options.invalidToken ? null : { id: "verified-admin", email: "admin@example.com" },
+        },
         error: null,
       }),
       admin: {
@@ -44,6 +75,18 @@ function setup(options = {}) {
           return options.linkFailure
             ? { data: null, error: { message: "recovery link unavailable" } }
             : { data: { properties: { action_link: RESET_LINK } }, error: null };
+        },
+        getUserById: async (id) => {
+          calls.push(["getUser", id]);
+          return options.authUserMissing
+            ? { data: null, error: { message: "User not found" } }
+            : { data: { user: authUser }, error: null };
+        },
+        updateUserById: async (id, args) => {
+          calls.push(["updateUser", id, args]);
+          return options.passwordUpdateFailure
+            ? { data: null, error: { message: "password should be at least 6 characters" } }
+            : { data: { user: { id } }, error: null };
         },
         deleteUser: async (id) => {
           calls.push(["delete", id]);
@@ -70,7 +113,16 @@ function setup(options = {}) {
         },
         insert: async (data) => {
           calls.push(["insert", table, data]);
-          return { error: null };
+          if (table !== "audit_logs") return { error: null };
+          // audit_logs.action is CHECK-constrained to INSERT/UPDATE/DELETE in some deployments.
+          if (options.auditCheckFailure && data.action === "password_reset_by_admin") {
+            return {
+              error: { message: 'violates check constraint "audit_logs_action_check"' },
+            };
+          }
+          return {
+            error: options.auditInsertFailure ? { message: "audit write failed" } : null,
+          };
         },
         maybeSingle: async () => ({
           data:
@@ -80,7 +132,9 @@ function setup(options = {}) {
                 : { id: "admin-role" }
               : table === "pending_registrations"
                 ? registration
-                : { id: "member" },
+                : options.profileMissing
+                  ? null
+                  : profile,
           error: null,
         }),
       };
@@ -97,6 +151,11 @@ function setup(options = {}) {
     Response,
     console: { error() {} },
     crypto: globalThis.crypto,
+    // The handler's only runtime dependency is the shared phone helper.
+    require: (specifier) => {
+      if (String(specifier).endsWith("_shared/phone.ts")) return sharedPhone;
+      throw new Error(`Unexpected require in admin-actions test: ${String(specifier)}`);
+    },
     fetch: async (url, init) => {
       calls.push(["email", url, JSON.parse(init.body)]);
       return { ok: !options.emailFailure };
@@ -361,10 +420,13 @@ test("create_manual_member with email creates Auth user, profile, and role", asy
   const create = calls.find((call) => call[0] === "create");
   assert.equal(create[1].email, "jane@example.com");
   assert.equal(create[1].email_confirm, true);
+  // Members sign in with a password straight away: the issued default, not an unusable random one.
+  assert.equal(create[1].password, DEFAULT_PASSWORD);
   assert.equal(create[1].user_metadata.full_name, "Jane Doe");
   assert.equal(create[1].user_metadata.phone_number, "0712345678");
 
   const upsertProfile = calls.find((call) => call[0] === "upsert" && call[1] === "profiles");
+  assert.equal(upsertProfile[2].is_default_password, true);
   assert.equal(upsertProfile[2].id, "created-user");
   assert.equal(upsertProfile[2].full_name, "Jane Doe");
   assert.equal(upsertProfile[2].email, "jane@example.com");
@@ -379,7 +441,7 @@ test("create_manual_member with email creates Auth user, profile, and role", asy
   assert.equal(upsertRole[2].role, "secretary");
 });
 
-test("create_manual_member without email creates a phone-backed Auth user, profile and role", async () => {
+test("create_manual_member without email mints a synthetic email so the member can sign in", async () => {
   const { request, calls } = setup();
   const response = await request({
     action: "create_manual_member",
@@ -393,22 +455,27 @@ test("create_manual_member without email creates a phone-backed Auth user, profi
   assert.equal(body.success, true);
   assert.equal(body.memberId, "created-user");
 
-  // profiles.id and user_roles.user_id reference auth.users, so a phone-only member still
-  // needs an Auth identity — with the phone unconfirmed, exactly like bot approval.
+  // profiles.id and user_roles.user_id reference auth.users, so a phone-only member still needs an
+  // Auth identity. Members sign in with a password and never an SMS code, so the identity is an
+  // email derived from their number: they type 0722000000 at /auth and reach this account.
   const create = calls.find((call) => call[0] === "create");
-  assert.equal(create[1].phone, "0722000000");
-  assert.equal(create[1].phone_confirm, false);
-  assert.equal(create[1].email, undefined);
-  assert.equal(create[1].password, undefined);
+  assert.equal(create[1].email, "254722000000@murage.foundation");
+  assert.equal(create[1].password, DEFAULT_PASSWORD);
+  assert.equal(create[1].email_confirm, true);
+  assert.equal(create[1].phone, undefined);
+  assert.equal(create[1].phone_confirm, undefined);
   assert.equal(create[1].user_metadata.full_name, "John Kamau");
   assert.equal(create[1].user_metadata.phone_number, "0722000000");
 
   const upsertProfile = calls.find((call) => call[0] === "upsert" && call[1] === "profiles");
   assert.equal(upsertProfile[2].id, "created-user");
   assert.equal(upsertProfile[2].full_name, "John Kamau");
+  // The synthetic address is an Auth-only identifier: it is never written to the profile.
   assert.equal(upsertProfile[2].email, null);
   assert.equal(upsertProfile[2].phone_number, "0722000000");
-  assert.equal(upsertProfile[2].phone_only_member, true);
+  // Phone login means these members can use the web app, so nobody is bot-only any more.
+  assert.equal(upsertProfile[2].phone_only_member, false);
+  assert.equal(upsertProfile[2].is_default_password, true);
   assert.equal(upsertProfile[2].status, "approved");
   assert.equal(upsertProfile[2].consent_given, true);
   assert.equal(upsertProfile[2].whatsapp_opt_in, true);
