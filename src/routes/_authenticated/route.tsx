@@ -46,6 +46,7 @@ import {
 } from "lucide-react";
 import { useRoles } from "@/hooks/use-roles";
 import { buildNavigation, type NavIcon } from "@/lib/rbac";
+import { AppFooter } from "@/components/AppFooter";
 
 /** Sidebar icons keyed by the identifiers returned by `buildNavigation`. */
 const NAV_ICONS = {
@@ -179,18 +180,21 @@ function AuthedLayout() {
           </SidebarFooter>
         </Sidebar>
 
-        <div className="flex flex-1 flex-col">
+        <div className="flex flex-1 flex-col min-h-0">
           <header className="flex h-14 items-center justify-between border-b border-border bg-background px-4">
             <div className="flex items-center gap-3">
               <SidebarTrigger />
               <div className="font-serif text-lg font-semibold text-primary">{activeTitle}</div>
             </div>
           </header>
-          <main className="flex-1 bg-background p-6">
+          <main className="flex-1 bg-background p-6 pb-20">
             {statusError ? (
               <p role="alert">Unable to verify membership. Please retry.</p>
             ) : profile?.status === "approved" ? (
-              <Outlet />
+              <>
+                <Outlet />
+                <AppFooter />
+              </>
             ) : (
               <p>Checking membership…</p>
             )}

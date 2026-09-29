@@ -14,6 +14,8 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { registerServiceWorker } from "@/registerSW";
+import { PWAInstallBanner } from "@/components/PWAInstallBanner";
 
 function NotFoundComponent() {
   return (
@@ -76,22 +78,22 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Murage Foundation — Financial Records" },
+      { title: "Murage Foundation — Funds Hub" },
       {
         name: "description",
-        content: "Internal system for managing Murage Foundation's donors, income and expenses.",
+        content: "Governance and financial management platform for Murage Foundation members.",
       },
-      { property: "og:title", content: "Murage Foundation — Financial Records" },
+      { property: "og:title", content: "Murage Foundation — Funds Hub" },
       {
         property: "og:description",
-        content: "Internal system for managing Murage Foundation's donors, income and expenses.",
+        content: "Governance and financial management platform for Murage Foundation members.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: "Murage Foundation — Financial Records" },
+      { name: "twitter:title", content: "Murage Foundation — Funds Hub" },
       {
         name: "twitter:description",
-        content: "Internal system for managing Murage Foundation's donors, income and expenses.",
+        content: "Governance and financial management platform for Murage Foundation members.",
       },
       {
         property: "og:image",
@@ -101,10 +103,17 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         name: "twitter:image",
         content: "/android-chrome-512x512.png",
       },
+      { name: "theme-color", content: "#1a472a" },
+      { name: "mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "default" },
+      { name: "apple-mobile-web-app-title", content: "Murage Hub" },
     ],
     links: [
+      { rel: "manifest", href: "/manifest.json" },
       { rel: "stylesheet", href: appCss },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
@@ -146,10 +155,16 @@ function RootComponent() {
     return () => sub.subscription.unsubscribe();
   }, [router, queryClient]);
 
+  // Register service worker on app load
+  useEffect(() => {
+    registerServiceWorker();
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <Outlet />
       <Toaster richColors position="top-right" />
+      <PWAInstallBanner />
     </QueryClientProvider>
   );
 }
