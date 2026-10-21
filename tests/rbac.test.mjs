@@ -69,7 +69,8 @@ test("treasurer gets the finance workspace but not administration", () => {
   ]) {
     assert.ok(urls.includes(url), `treasurer should reach ${url}`);
   }
-  for (const url of ["/users", "/loan-rules", "/data-import", "/donors", "/loan-votes"]) {
+  assert.ok(urls.includes("/donors"), "treasurer should view donor details and record donations");
+  for (const url of ["/users", "/loan-rules", "/data-import", "/loan-votes"]) {
     assert.ok(!urls.includes(url), `treasurer should not reach ${url}`);
   }
   assert.deepEqual(sectionLabels(["treasurer"]), ["My Account", "Management"]);

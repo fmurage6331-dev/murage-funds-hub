@@ -128,7 +128,7 @@ export function buildNavigation(roles: Role[]): NavSection[] {
     managementItems.push({ title: "Member Profiles", url: "/member-profile", icon: "user-circle" });
     managementItems.push({ title: "Audit Logs", url: "/audit-logs", icon: "scroll-text" });
   }
-  if (r.isSecretariat) {
+  if (r.isSecretariat || r.isTreasurer) {
     managementItems.push({ title: "Donors", url: "/donors", icon: "users" });
   }
   if (r.isAdmin || r.isBoardMember || r.isChairman) {

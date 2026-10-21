@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { useRoles } from "@/hooks/use-roles";
+import { countActiveDonors } from "@/lib/donor-finances";
 import { RepaymentScheduleDialog } from "@/components/loans/RepaymentScheduleDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -150,15 +151,6 @@ function Dashboard() {
       return data;
     },
   });
-  const { data: donorCount = 0 } = useQuery({
-    queryKey: ["donors", "count"],
-    enabled: isOfficer,
-    queryFn: async () => {
-      const { count } = await supabase.from("donors").select("*", { count: "exact", head: true });
-      return count ?? 0;
-    },
-  });
-
   const { data: riskLoans = [] } = useQuery({
     queryKey: ["loan_risk_flags"],
     enabled: isOfficer,
@@ -221,9 +213,12 @@ function Dashboard() {
     (l) => l.risk_tier === "watch" || l.risk_tier === "early_overdue",
   ).length;
 
+  // Financial income is sourced from transactions only. Member contributions remain in their
+  // separate member-only table and are not added here, so donor gifts aren't double counted.
   const income = txs.filter((t) => t.type === "income").reduce((s, t) => s + Number(t.amount), 0);
   const expense = txs.filter((t) => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);
   const balance = income - expense;
+  const activeDonorCount = countActiveDonors(txs);
 
   // last 6 months
   const months: { key: string; label: string; income: number; expense: number }[] = [];
@@ -274,7 +269,12 @@ function Dashboard() {
       icon: Wallet,
       tone: balance >= 0 ? "text-primary" : "text-destructive",
     },
-    { label: "Donors", value: donorCount.toString(), icon: Users, tone: "text-primary" },
+    {
+      label: "Active donors",
+      value: activeDonorCount.toString(),
+      icon: Users,
+      tone: "text-primary",
+    },
   ];
   const dashboardStats = canReviewLoanPayments
     ? [
