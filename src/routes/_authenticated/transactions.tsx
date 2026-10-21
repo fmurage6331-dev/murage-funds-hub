@@ -35,6 +35,7 @@ import { Plus, Pencil, Trash2, Download, FileSpreadsheet } from "lucide-react";
 import { toast } from "sonner";
 import { UnauthorizedCard } from "@/components/shared/UnauthorizedCard";
 import { useRoles } from "@/hooks/use-roles";
+import { INCOME_CATEGORIES } from "@/lib/transaction-categories";
 
 export const Route = createFileRoute("/_authenticated/transactions")({
   component: TransactionsPage,
@@ -59,7 +60,7 @@ const fmt = (n: number) =>
     maximumFractionDigits: 0,
   }).format(n);
 
-const INCOME_CATS = ["Donation", "Grant", "Fundraiser", "Interest", "Other income"];
+const INCOME_CATS = INCOME_CATEGORIES;
 const EXPENSE_CATS = [
   "Programs",
   "Salaries",
